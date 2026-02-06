@@ -13,7 +13,7 @@ SECRET_KEY = 'django-insecure-1)yd$x6@@-yd8m68p2z!=9=_cn*&p%0)d0+1+d@^zwc5((pxgf
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['templates']
+ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'tenant',
+    'user',
 ]
 
 MIDDLEWARE = [
@@ -120,6 +121,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# Custom User Model
+AUTH_USER_MODEL = 'user.User'
 
 
 # Logging Configuration
