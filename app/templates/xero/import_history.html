@@ -1,0 +1,194 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Import History{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">
+                <i class="fas fa-history me-2"></i>
+                Xero Data Import History
+            </h1>
+            <p class="lead text-muted">View all past imports for your tenant</p>
+        </div>
+    </div>
+
+    <!-- Filter Section (Optional) -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <select class="form-select" name="legal_entity" id="filterEntity">
+                        <option value="">All Legal Entities</option>
+                        {% for entity in imports|dictsort:"legal_entity" %}
+                            <option value="{{ entity.legal_entity.id }}">{{ entity.legal_entity.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select" name="status" id="filterStatus">
+                        <option value="">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-filter me-2"></i>
+                        Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Imports Table -->
+    {% if imports %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th><i class="fas fa-building me-2"></i> Legal Entity</th>
+                        <th><i class="fas fa-list me-2"></i> Dataset Type</th>
+                        <th><i class="fas fa-file me-2"></i> File Name</th>
+                        <th><i class="fas fa-user me-2"></i> Uploaded By</th>
+                        <th><i class="fas fa-calendar me-2"></i> Date</th>
+                        <th><i class="fas fa-chart-bar me-2"></i> Rows</th>
+                        <th><i class="fas fa-info-circle me-2"></i> Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for import in imports %}
+                        <tr>
+                            <td>
+                                <strong>{{ import.legal_entity.name }}</strong>
+                            </td>
+                            <td>
+                                {{ import.dataset_type.display_name }}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ import.file_name }}</small>
+                            </td>
+                            <td>
+                                {{ import.created_by.first_name }} {{ import.created_by.last_name|default:'' }}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ import.created_at|date:"M d, Y" }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ import.rows_processed }}</span>
+                            </td>
+                            <td>
+                                {% if import.status == 'pending' %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-hourglass-half me-1"></i>
+                                        Pending
+                                    </span>
+                                {% elif import.status == 'processing' %}
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        Processing
+                                    </span>
+                                {% elif import.status == 'completed' %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Completed
+                                    </span>
+                                {% elif import.status == 'failed' %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-times-circle me-1"></i>
+                                        Failed
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'import_detail' import_id=import.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="row mt-5 mb-4">
+            <div class="col-md-3">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body py-4">
+                        <h5 class="text-muted">Total Imports</h5>
+                        <p class="display-6 mb-0 text-primary">{{ imports|length }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body py-4">
+                        <h5 class="text-muted">Completed</h5>
+                        <p class="display-6 mb-0 text-success">
+                            {% widthratio imports|length 1 1 as total %}
+                            {% if total > 0 %}
+                                {% load tags %}
+                            {% endif %}
+                            {{ imports|dictsort:"status" }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body py-4">
+                        <h5 class="text-muted">Failed</h5>
+                        <p class="display-6 mb-0 text-danger">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body py-4">
+                        <h5 class="text-muted">In Progress</h5>
+                        <p class="display-6 mb-0 text-info">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <div class="alert alert-info" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            No imports found. 
+            <a href="{% url 'start_import' %}" class="alert-link">Start your first import</a>.
+        </div>
+    {% endif %}
+
+    <!-- Quick Links -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Links</h5>
+                    <a href="{% url 'start_import' %}" class="btn btn-outline-primary me-2 mb-2">
+                        <i class="fas fa-file-upload me-2"></i>
+                        Start New Import
+                    </a>
+                    <a href="{% url 'legal_entities_list' %}" class="btn btn-outline-secondary me-2 mb-2">
+                        <i class="fas fa-building me-2"></i>
+                        Legal Entities
+                    </a>
+                    <a href="{% url 'home' %}" class="btn btn-outline-secondary mb-2">
+                        <i class="fas fa-home me-2"></i>
+                        Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

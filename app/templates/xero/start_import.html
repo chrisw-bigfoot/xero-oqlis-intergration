@@ -1,0 +1,162 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Start Xero Data Import{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">
+                <i class="fas fa-file-import me-2"></i>
+                Start Xero Data Import
+            </h1>
+            <p class="lead text-muted">Select the legal entity and dataset type you want to import</p>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-8">
+            <form method="post" action="{% url 'start_import' %}">
+                {% csrf_token %}
+                
+                <!-- Select Legal Entity -->
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-building me-2 text-primary"></i>
+                            Step 1: Select Legal Entity
+                        </h5>
+                        
+                        {% if legal_entities %}
+                            <div class="row">
+                                {% for entity in legal_entities %}
+                                    <div class="col-md-6 mb-3">
+                                        <div class="form-check form-check-inline border rounded p-3 w-100">
+                                            <input 
+                                                class="form-check-input" 
+                                                type="radio" 
+                                                name="legal_entity" 
+                                                id="entity_{{ entity.id }}"
+                                                value="{{ entity.id }}"
+                                                required
+                                            >
+                                            <label class="form-check-label w-100" for="entity_{{ entity.id }}">
+                                                <strong>{{ entity.name }}</strong>
+                                                <br>
+                                                <small class="text-muted">{{ entity.xero_imports.count }} import(s)</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No legal entities found. 
+                                <a href="{% url 'legal_entities_list' %}" class="alert-link">Create one first</a>.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Select Dataset Type -->
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-list me-2 text-success"></i>
+                            Step 2: Select Dataset Type
+                        </h5>
+                        
+                        {% if dataset_types %}
+                            <div class="row">
+                                {% for dtype in dataset_types %}
+                                    <div class="col-md-6 mb-3">
+                                        <div class="form-check form-check-inline border rounded p-3 w-100">
+                                            <input 
+                                                class="form-check-input" 
+                                                type="radio" 
+                                                name="dataset_type" 
+                                                id="dtype_{{ dtype.id }}"
+                                                value="{{ dtype.id }}"
+                                                required
+                                            >
+                                            <label class="form-check-label w-100" for="dtype_{{ dtype.id }}">
+                                                <strong>{{ dtype.display_name }}</strong>
+                                                {% if dtype.description %}
+                                                    <br>
+                                                    <small class="text-muted">{{ dtype.description }}</small>
+                                                {% endif %}
+                                            </label>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No dataset types available. Please contact your administrator.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg flex-grow-1"
+                                    {% if not legal_entities or not dataset_types %}disabled{% endif %}>
+                                <i class="fas fa-arrow-right me-2"></i>
+                                Continue to Upload
+                            </button>
+                            <a href="{% url 'legal_entities_list' %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-times me-2"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Info Sidebar -->
+        <div class="col-md-4">
+            <div class="card sticky-top mt-5 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-lightbulb me-2 text-warning"></i>
+                        Import Guide
+                    </h5>
+                    <p class="card-text small">
+                        <strong>What is a Legal Entity?</strong><br>
+                        A legal entity is a separate company or organization within your Xero account that has its own chart of accounts and data.
+                    </p>
+                    <hr>
+                    <p class="card-text small">
+                        <strong>Dataset Types:</strong><br>
+                        Choose the type of data you want to import from your Xero export file.
+                    </p>
+                    <ul class="small text-muted">
+                        <li>Invoices - Customer invoices</li>
+                        <li>Bills - Supplier bills</li>
+                        <li>Contacts - Customers & suppliers</li>
+                        <li>Accounts - Chart of accounts</li>
+                        <li>Journal Entries - GL journal entries</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

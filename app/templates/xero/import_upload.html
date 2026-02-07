@@ -1,0 +1,217 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Upload Import File{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <h1 class="card-title mb-4">
+                        <i class="fas fa-cloud-upload-alt me-2 text-primary"></i>
+                        Upload Xero Data File
+                    </h1>
+
+                    <!-- Import Details -->
+                    <div class="alert alert-info mb-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-building me-2"></i>
+                                    Legal Entity
+                                </h6>
+                                <p class="mb-0"><strong>{{ legal_entity.name }}</strong></p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-list me-2"></i>
+                                    Dataset Type
+                                </h6>
+                                <p class="mb-0"><strong>{{ dataset_type.display_name }}</strong></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- File Upload Form -->
+                    <form method="post" action="" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+
+                        <div class="mb-4">
+                            <label for="id_file" class="form-label">
+                                <i class="fas fa-file me-2"></i>
+                                Select File to Upload *
+                            </label>
+                            
+                            <!-- Drag and Drop Area -->
+                            <div 
+                                class="border-2 border-dashed rounded p-5 text-center cursor-pointer" 
+                                id="dropZone"
+                                style="border-color: #dee2e6; transition: all 0.3s;"
+                            >
+                                <i class="fas fa-file-csv fa-3x mb-3 text-muted" id="fileIcon"></i>
+                                <h5 class="mb-2">Drag and drop your file here</h5>
+                                <p class="text-muted mb-3">or</p>
+                                <input 
+                                    type="file" 
+                                    class="form-control d-none" 
+                                    id="id_file"
+                                    name="file"
+                                    accept=".csv,.xlsx,.xls"
+                                    required
+                                >
+                                <label for="id_file" class="btn btn-primary mb-3">
+                                    <i class="fas fa-folder-open me-2"></i>
+                                    Browse Files
+                                </label>
+                                <p class="text-muted small">
+                                    Supported formats: CSV, XLSX, XLS<br>
+                                    Maximum file size: 50MB
+                                </p>
+                            </div>
+
+                            <!-- Selected File Display -->
+                            <div id="selectedFile" class="mt-3 d-none">
+                                <div class="alert alert-success">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    <strong>Selected file:</strong> <span id="fileName"></span>
+                                </div>
+                            </div>
+
+                            <small class="form-text text-muted d-block mt-2">
+                                Make sure your file contains data exported from Xero in the format for {{ dataset_type.display_name }}.
+                            </small>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2 mt-5">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                                <i class="fas fa-upload me-2"></i>
+                                Upload and Process
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Back Link -->
+                    <div class="text-center mt-3">
+                        <a href="{% url 'start_import' %}" class="btn btn-link">
+                            <i class="fas fa-arrow-left me-2"></i>
+                            Back to Import Setup
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="card mt-4 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-question-circle me-2 text-info"></i>
+                        File Format Requirements
+                    </h5>
+                    <ul class="small mb-0">
+                        <li>File must be in CSV, XLSX, or XLS format</li>
+                        <li>Headers must match Xero export format for {{ dataset_type.display_name }}</li>
+                        <li>UTF-8 encoding recommended for text files</li>
+                        <li>No empty rows between data</li>
+                        <li>Maximum 50MB file size</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Drag and drop functionality
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('id_file');
+const selectedFileDiv = document.getElementById('selectedFile');
+const fileNameSpan = document.getElementById('fileName');
+const submitBtn = document.getElementById('submitBtn');
+
+// Prevent default drag behaviors
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+// Highlight on drag
+['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, unhighlight, false);
+});
+
+function highlight() {
+    dropZone.style.borderColor = '#0d6efd';
+    dropZone.style.backgroundColor = '#f8f9ff';
+}
+
+function unhighlight() {
+    dropZone.style.borderColor = '#dee2e6';
+    dropZone.style.backgroundColor = 'transparent';
+}
+
+// Handle drop
+dropZone.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    fileInput.files = files;
+    handleFileSelection();
+}
+
+// Handle file selection via input
+fileInput.addEventListener('change', handleFileSelection);
+
+function handleFileSelection() {
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const validExtensions = ['csv', 'xlsx', 'xls'];
+        const fileExt = file.name.split('.').pop().toLowerCase();
+        
+        if (validExtensions.includes(fileExt)) {
+            fileNameSpan.textContent = file.name;
+            selectedFileDiv.classList.remove('d-none');
+            submitBtn.disabled = false;
+        } else {
+            alert('Invalid file type. Please upload a CSV, XLSX, or XLS file.');
+            fileInput.value = '';
+            selectedFileDiv.classList.add('d-none');
+            submitBtn.disabled = true;
+        }
+    } else {
+        selectedFileDiv.classList.add('d-none');
+        submitBtn.disabled = true;
+    }
+}
+
+// Make drop zone clickable
+dropZone.addEventListener('click', () => fileInput.click());
+</script>
+
+<style>
+#dropZone {
+    cursor: pointer;
+}
+</style>
+{% endblock %}
