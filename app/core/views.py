@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from user.forms import LoginForm
+from xero.models import XeroDataImport
 
 
 def index(request):
@@ -41,4 +42,28 @@ def logout_view(request):
 
 @login_required
 def home(request):
-    return render(request, "core/home.html")
+    context = {}
+    if request.user.tenant:
+        # Get all imports for this tenant
+        imports = XeroDataImport.objects.filter(
+            legal_entity__tenant=request.user.tenant
+        ).order_by('-created_at')
+        
+        # Calculate metrics
+        total_imports = imports.count()
+        completed_imports = imports.filter(status='completed').count()
+        failed_imports = imports.filter(status='failed').count()
+        
+        # Calculate failure rate percentage
+        if total_imports > 0:
+            failure_rate = round((failed_imports / total_imports) * 100)
+        else:
+            failure_rate = 0
+        
+        context['imports'] = imports
+        context['total_imports'] = total_imports
+        context['completed_imports'] = completed_imports
+        context['failed_imports'] = failed_imports
+        context['failure_rate'] = failure_rate
+    
+    return render(request, "core/home.html", context)

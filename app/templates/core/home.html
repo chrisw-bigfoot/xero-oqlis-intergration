@@ -53,8 +53,8 @@
             <div class="col-md-3">
                 <div class="card text-center border-0 shadow-sm">
                     <div class="card-body py-4">
-                        <h6 class="text-muted mb-2">Total Imports</h6>
-                        <p class="display-6 mb-0 text-success">0</p>
+                        <h6 class="text-muted mb-2">Total Uploads</h6>
+                        <p class="display-6 mb-0 text-info">{{ total_imports }}</p>
                     </div>
                 </div>
             </div>
@@ -62,15 +62,15 @@
                 <div class="card text-center border-0 shadow-sm">
                     <div class="card-body py-4">
                         <h6 class="text-muted mb-2">Completed</h6>
-                        <p class="display-6 mb-0 text-info">0</p>
+                        <p class="display-6 mb-0 text-success">{{ completed_imports }}</p>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card text-center border-0 shadow-sm">
                     <div class="card-body py-4">
-                        <h6 class="text-muted mb-2">In Progress</h6>
-                        <p class="display-6 mb-0 text-warning">0</p>
+                        <h6 class="text-muted mb-2">Failure Rate</h6>
+                        <p class="display-6 mb-0 text-danger">{{ failure_rate }}%</p>
                     </div>
                 </div>
             </div>
