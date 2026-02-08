@@ -9,10 +9,13 @@
     <div class="row mb-5">
         <div class="col-lg-8">
             <h1 class="display-5 mb-3">
-                Welcome, {{ user.first_name|default:user.email }}! 👋
+                Welcome, {{ user.first_name|default:user.email }}!
             </h1>
             <p class="lead text-muted">
-                Manage and import your Xero data with ease
+                Import your Xero data with ease
+                <button type="button" class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="modal" data-bs-target="#howItWorksModal" title="Learn how it works">
+                    <i class="fas fa-question-circle text-primary" style="font-size: 1.25rem;"></i>
+                </button>
             </p>
 
             {% if not user.tenant %}
@@ -24,8 +27,10 @@
                 </div>
             {% else %}
                 <p class="text-muted">
-                    <i class="fas fa-building me-2"></i>
-                    Tenant: <strong>{{ user.tenant.name }}</strong>
+                    {% if user.tenant.logo %}
+                        <img src="{{ user.tenant.logo.url }}" alt="{{ user.tenant.name }}" style="height: 32px; width: auto; margin-right: 0.75rem; vertical-align: middle;">
+                    {% endif %}
+                    <strong>{{ user.tenant.name }}</strong>
                 </p>
             {% endif %}
         </div>
@@ -33,6 +38,44 @@
 
     <!-- Main Dashboard -->
     {% if user.tenant %}
+        <!-- Statistics (Optional) -->
+        <div class="row mb-5">
+            <div class="col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body py-4">
+                        <h6 class="text-muted mb-2">Legal Entities</h6>
+                        <p class="display-6 mb-0 text-primary">
+                            {{ user.tenant.legal_entities.count }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body py-4">
+                        <h6 class="text-muted mb-2">Total Imports</h6>
+                        <p class="display-6 mb-0 text-success">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body py-4">
+                        <h6 class="text-muted mb-2">Completed</h6>
+                        <p class="display-6 mb-0 text-info">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body py-4">
+                        <h6 class="text-muted mb-2">In Progress</h6>
+                        <p class="display-6 mb-0 text-warning">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Quick Actions -->
         <div class="row mb-5">
             <div class="col-md-4 mb-3">
@@ -75,54 +118,18 @@
             </div>
         </div>
 
-        <!-- Statistics (Optional) -->
-        <div class="row mb-5">
-            <div class="col-md-3">
-                <div class="card text-center border-0 shadow-sm">
-                    <div class="card-body py-4">
-                        <h6 class="text-muted mb-2">Legal Entities</h6>
-                        <p class="display-6 mb-0 text-primary">
-                            {{ user.tenant.legal_entities.count }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center border-0 shadow-sm">
-                    <div class="card-body py-4">
-                        <h6 class="text-muted mb-2">Total Imports</h6>
-                        <p class="display-6 mb-0 text-success">0</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center border-0 shadow-sm">
-                    <div class="card-body py-4">
-                        <h6 class="text-muted mb-2">Completed</h6>
-                        <p class="display-6 mb-0 text-info">0</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center border-0 shadow-sm">
-                    <div class="card-body py-4">
-                        <h6 class="text-muted mb-2">In Progress</h6>
-                        <p class="display-6 mb-0 text-warning">0</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Import Process Overview -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body p-5">
-                        <h5 class="card-title mb-4">
+        <!-- How It Works Modal -->
+        <div class="modal fade" id="howItWorksModal" tabindex="-1" aria-labelledby="howItWorksLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="howItWorksLabel">
                             <i class="fas fa-clipboard-list me-2"></i>
                             How It Works
                         </h5>
-                        
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="process-step mb-4">
@@ -160,6 +167,9 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     </div>
                 </div>
             </div>
