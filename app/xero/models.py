@@ -7,15 +7,8 @@ User = get_user_model()
 
 class DatasetType(models.Model):
     """Available dataset types for Xero data imports"""
-    DATASET_CHOICES = [
-        ('invoices', 'Invoices'),
-        ('bills', 'Bills'),
-        ('contacts', 'Contacts'),
-        ('accounts', 'Chart of Accounts'),
-        ('journal_entries', 'Journal Entries'),
-    ]
     
-    name = models.CharField(max_length=50, choices=DATASET_CHOICES, unique=True)
+    name = models.CharField(max_length=50, unique=True, help_text="Internal identifier (lowercase, no spaces)")
     display_name = models.CharField(max_length=100, help_text="User-friendly display name")
     description = models.TextField(blank=True)
 
@@ -25,6 +18,7 @@ class DatasetType(models.Model):
     class Meta:
         verbose_name = "Dataset Type"
         verbose_name_plural = "Dataset Types"
+        ordering = ['display_name']
 
 
 class XeroDataImport(models.Model):

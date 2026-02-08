@@ -4,8 +4,27 @@ from .models import DatasetType, XeroDataImport
 
 @admin.register(DatasetType)
 class DatasetTypeAdmin(admin.ModelAdmin):
-    list_display = ('display_name', 'name')
-    search_fields = ('display_name', 'name')
+    list_display = ('display_name', 'name', 'description_preview')
+    list_filter = ('name',)
+    search_fields = ('display_name', 'name', 'description')
+    ordering = ('display_name',)
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'display_name')
+        }),
+        ('Details', {
+            'fields': ('description',),
+            'classes': ('wide',)
+        }),
+    )
+    
+    def description_preview(self, obj):
+        """Show first 50 characters of description in list view"""
+        if obj.description:
+            return obj.description[:50] + '...' if len(obj.description) > 50 else obj.description
+        return '—'
+    description_preview.short_description = 'Description'
 
 
 @admin.register(XeroDataImport)
