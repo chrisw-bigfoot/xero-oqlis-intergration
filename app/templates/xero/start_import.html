@@ -5,27 +5,31 @@
 
 {% block content %}
 <div class="container mt-5">
-    <div class="row">
-        <div class="col-md-12">
-            <h1 class="mb-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="mb-4 text-center">
                 <i class="fas fa-file-import me-2"></i>
                 Start Xero Data Import
             </h1>
-            <p class="lead text-muted">Select the legal entity and dataset type you want to import</p>
+            <p class="lead text-muted text-center">Select the legal entity and dataset type you want to import</p>
         </div>
     </div>
 
     <!-- Messages -->
     {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
             </div>
-        {% endfor %}
+        </div>
     {% endif %}
 
-    <div class="row">
+    <div class="row justify-content-center">
         <div class="col-md-8">
             <form method="post" action="{% url 'start_import' %}">
                 {% csrf_token %}
@@ -36,6 +40,9 @@
                         <h5 class="card-title">
                             <i class="fas fa-building me-2 text-primary"></i>
                             Step 1: Select Legal Entity
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="modal" data-bs-target="#legalEntityGuideModal" title="Learn more">
+                                <i class="fas fa-lightbulb text-warning" style="font-size: 1rem;"></i>
+                            </button>
                         </h5>
                         
                         {% if legal_entities %}
@@ -76,6 +83,9 @@
                         <h5 class="card-title">
                             <i class="fas fa-list me-2 text-success"></i>
                             Step 2: Select Dataset Type
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="modal" data-bs-target="#datasetTypeGuideModal" title="Learn more">
+                                <i class="fas fa-lightbulb text-warning" style="font-size: 1rem;"></i>
+                            </button>
                         </h5>
                         
                         {% if dataset_types %}
@@ -130,30 +140,81 @@
             </form>
         </div>
 
-        <!-- Info Sidebar -->
-        <div class="col-md-4">
-            <div class="card sticky-top mt-5 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">
-                        <i class="fas fa-lightbulb me-2 text-warning"></i>
-                        Import Guide
+        <!-- Info Sidebar - Now using modals -->
+    </div>
+
+    <!-- Legal Entity Guide Modal -->
+    <div class="modal fade" id="legalEntityGuideModal" tabindex="-1" aria-labelledby="legalEntityGuideLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="legalEntityGuideLabel">
+                        <i class="fas fa-building me-2 text-primary"></i>
+                        What is a Legal Entity?
                     </h5>
-                    <p class="card-text small">
-                        <strong>What is a Legal Entity?</strong><br>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
                         A legal entity is a separate company or organization within your Xero account that has its own chart of accounts and data.
                     </p>
-                    <hr>
-                    <p class="card-text small">
-                        <strong>Dataset Types:</strong><br>
-                        Choose the type of data you want to import from your Xero export file.
+                    <p>
+                        Each legal entity maintains independent financial records, and you can manage imports for each organization separately.
                     </p>
-                    <ul class="small text-muted">
-                        <li>Invoices - Customer invoices</li>
-                        <li>Bills - Supplier bills</li>
-                        <li>Contacts - Customers & suppliers</li>
-                        <li>Accounts - Chart of accounts</li>
-                        <li>Journal Entries - GL journal entries</li>
-                    </ul>
+                    <p class="mb-0 text-muted">
+                        <small>
+                            <i class="fas fa-info-circle me-2"></i>
+                            Select the legal entity you want to import data for from the list on the left.
+                        </small>
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Type Guide Modal -->
+    <div class="modal fade" id="datasetTypeGuideModal" tabindex="-1" aria-labelledby="datasetTypeGuideLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="datasetTypeGuideLabel">
+                        <i class="fas fa-lightbulb me-2 text-warning"></i>
+                        Dataset Types Guide
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-4">
+                        Choose the type of data you want to import from your Xero export file. Click on each type to learn more:
+                    </p>
+                    {% if dataset_types %}
+                        <div class="row">
+                            {% for dtype in dataset_types %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="card border-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title text-primary">{{ dtype.display_name }}</h6>
+                                            {% if dtype.description %}
+                                                <p class="card-text small text-muted mb-0">{{ dtype.description }}</p>
+                                            {% else %}
+                                                <p class="card-text small text-muted mb-0">Import {{ dtype.display_name|lower }} data from your Xero account.</p>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <small>No dataset types available.</small>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
