@@ -17,6 +17,9 @@
         :root {
             --primary-color: #0d6efd;
             --secondary-color: #6c757d;
+            --blue-gradient: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+            --orange-color: #ff8c42;
+            --orange-gradient: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
         }
 
         body {
@@ -36,42 +39,107 @@
         .login-card {
             background: #ffffff;
             border: none;
-            box-shadow: 0 .125rem .25rem rgba(0, 0, 0, .075);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             width: 100%;
-            max-width: 420px;
-            border-radius: 10px;
+            max-width: 900px;
+            border-radius: 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
         }
 
-        .login-header {
-            background-color: #e8ecf1;
-            color: #333;
-            padding: 2rem;
+        /* Left Column - Description */
+        .login-sidebar {
+            background: var(--orange-gradient);
+            color: white;
+            padding: 3rem 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             text-align: center;
-            border-bottom: 1px solid #dee2e6;
+            position: relative;
+            overflow: hidden;
         }
 
-        .login-header img {
-            max-width: 80px;
+        .login-sidebar::before {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            top: -100px;
+            right: -50px;
+        }
+
+        .login-sidebar::after {
+            content: '';
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+            bottom: -80px;
+            left: -40px;
+        }
+
+        .sidebar-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .sidebar-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            display: inline-block;
+        }
+
+        .sidebar-content h3 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-content p {
+            font-size: 1rem;
+            line-height: 1.6;
+            opacity: 0.95;
+            margin-bottom: 0;
+        }
+
+        /* Right Column - Login Form */
+        .login-form-section {
+            padding: 3rem 2.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .login-form-header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .login-form-header img {
+            max-width: 50px;
             height: auto;
             margin-bottom: 1rem;
         }
 
-        .login-header h2 {
+        .login-form-header h2 {
             font-size: 1.75rem;
             font-weight: 700;
+            color: #333;
             margin-bottom: 0.5rem;
             letter-spacing: -0.5px;
         }
 
-        .login-header p {
+        .login-form-header p {
             font-size: 0.95rem;
-            margin-bottom: 0;
             color: #6c757d;
-        }
-
-        .form-area {
-            padding: 2rem;
+            margin-bottom: 0;
         }
 
         .form-label {
@@ -121,6 +189,29 @@
             border-color: #0a58ca;
         }
 
+        .btn-orange {
+            background-color: var(--orange-color);
+            border-color: var(--orange-color);
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem 2rem;
+            transition: all 0.15s ease;
+            border-radius: 0.375rem;
+        }
+
+        .btn-orange:hover {
+            background-color: #ff7f2e;
+            border-color: #ff7f2e;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3);
+        }
+
+        .btn-orange:active {
+            background-color: #ff6b35;
+            border-color: #ff6b35;
+            transform: translateY(0);
+        }
+
         .btn-lg {
             padding: 0.875rem 2.5rem;
             font-size: 1rem;
@@ -140,20 +231,6 @@
         .form-control.is-invalid:focus {
             border-color: #dc3545;
             box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
-        }
-
-        @media (max-width: 576px) {
-            .login-header {
-                padding: 1.5rem;
-            }
-
-            .login-header h2 {
-                font-size: 1.5rem;
-            }
-
-            .form-area {
-                padding: 1.5rem;
-            }
         }
 
         /* Toast Styles */
@@ -194,20 +271,72 @@
         .btn-close-toast:hover {
             opacity: 1;
         }
+
+        /* Toast Type Colors */
+        .toast.success .toast-header {
+            background-color: #198754;
+        }
+
+        .toast.error .toast-header {
+            background-color: #dc3545;
+        }
+
+        .toast.warning .toast-header {
+            background-color: #ffc107;
+            color: #333;
+        }
+
+        .toast.warning .btn-close-toast {
+            color: #333;
+        }
+
+        .toast.info .toast-header {
+            background-color: var(--primary-color);
+        }
+
+        @media (max-width: 768px) {
+            .login-card {
+                grid-template-columns: 1fr;
+            }
+
+            .login-sidebar {
+                padding: 2rem;
+            }
+
+            .login-form-section {
+                padding: 2rem;
+            }
+
+            .login-form-header h2 {
+                font-size: 1.5rem;
+            }
+
+            .sidebar-content h3 {
+                font-size: 1.5rem;
+            }
+
+            .sidebar-icon {
+                font-size: 3rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
-            <!-- Header -->
-            <div class="login-header">
-                <img src="{% static 'assets/img/bigfoot-logo.png' %}" alt="Bigfoot Logo">
-                <h2>Sign In</h2>
-                <p>Access your Xero Integration Dashboard</p>
+            <!-- Left Sidebar - Description -->
+            <div class="login-sidebar">
+                <div class="sidebar-content">
+                    <div class="sidebar-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <h3>Xero Integration</h3>
+                    <p>Upload your Xero data with ease! Securely manage and organize your financial information in one central hub.</p>
+                </div>
             </div>
 
-            <!-- Form Area -->
-            <div class="form-area">
+            <!-- Right Section - Login Form -->
+            <div class="login-form-section">
                 <!-- Toast Container for Messages -->
                 <div class="toast-container" id="toast-container"></div>
                 
@@ -216,22 +345,40 @@
                         document.addEventListener('DOMContentLoaded', function() {
                             const messages = [
                                 {% for message in messages %}
-                                    "{{ message|escapejs }}",
+                                    { text: "{{ message|escapejs }}", tags: "{{ message.tags }}" },
                                 {% endfor %}
                             ];
                             
                             const toastContainer = document.getElementById('toast-container');
                             
+                            const iconMap = {
+                                'success': 'fa-check-circle',
+                                'error': 'fa-times-circle',
+                                'warning': 'fa-exclamation-circle',
+                                'info': 'fa-info-circle'
+                            };
+                            
+                            const titleMap = {
+                                'success': 'Success',
+                                'error': 'Error',
+                                'warning': 'Warning',
+                                'info': 'Notification'
+                            };
+                            
                             messages.forEach((message) => {
+                                const tags = message.tags || 'info';
+                                const icon = iconMap[tags] || 'fa-info-circle';
+                                const title = titleMap[tags] || 'Notification';
+                                
                                 const toastHtml = `
-                                    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                                    <div class="toast ${tags} show" role="alert" aria-live="assertive" aria-atomic="true">
                                         <div class="toast-header">
-                                            <i class="fas fa-info-circle me-2"></i>
-                                            <strong class="me-auto">Notification</strong>
+                                            <i class="fas ${icon} me-2"></i>
+                                            <strong class="me-auto">${title}</strong>
                                             <button type="button" class="btn-close btn-close-toast" data-bs-dismiss="toast" aria-label="Close"></button>
                                         </div>
                                         <div class="toast-body">
-                                            ${message}
+                                            ${message.text}
                                         </div>
                                     </div>
                                 `;
@@ -247,6 +394,13 @@
                         });
                     </script>
                 {% endif %}
+
+                <!-- Login Form Header -->
+                <div class="login-form-header">
+                    <img src="{% static 'assets/img/bigfoot-logo.png' %}" alt="Bigfoot Logo">
+                    <h2>Hello Again!</h2>
+                    <p>Sign in to your account</p>
+                </div>
 
                 <!-- Login Form -->
                 <form method="post" action="{% url 'login' %}" novalidate>
@@ -280,7 +434,7 @@
 
                     <!-- Submit Button -->
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-primary btn-lg">Sign In</button>
+                        <button type="submit" class="btn btn-orange btn-lg">Sign In</button>
                     </div>
                 </form>
             </div>
