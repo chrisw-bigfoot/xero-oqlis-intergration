@@ -87,6 +87,12 @@
             border-color: #0a58ca;
         }
 
+        /* User Dropdown - position relative to parent */
+        .navbar-nav .nav-item.dropdown .dropdown-menu {
+            position: absolute;
+            right: 0;
+        }
+
         /* Toast Styles */
         .toast-container {
             position: fixed;
@@ -159,7 +165,7 @@
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top">
-        <div class="container">
+        <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'home' %}">
                 <img src="{% static 'assets/img/bigfoot-logo.png' %}" alt="Bigfoot Logo">
                 Xero Integration
@@ -168,9 +174,29 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
+                <!-- Left Navigation Links -->
+                <ul class="navbar-nav">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'home' %}">
+                                <i class="fas fa-home me-1"></i>
+                                Home
+                            </a>
+                        </li>
+                        {% if user.tenant %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'legal_entities_list' %}">
+                                    <i class="fas fa-building me-1"></i>
+                                    Legal Entities
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endif %}
+                </ul>
+
+                <!-- Right Navigation - User Dropdown -->
                 <ul class="navbar-nav ms-auto">
                     {% if user.is_authenticated %}
-                        <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <div class="user-avatar" style="background-color: {{ user.avatar_color }};">
                                     {{ user.get_initials }}
@@ -178,8 +204,6 @@
                                 <span class="ms-2 d-lg-none">{{ user.first_name|default:user.email }}</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                <li><h6 class="dropdown-header">{{ user.first_name }} {{ user.last_name }}</h6></li>
-                                <li><small class="dropdown-item text-muted">{{ user.email }}</small></li>
                                 {% if user.tenant %}
                                 <li>
                                     <small class="dropdown-item text-muted">
@@ -192,8 +216,10 @@
                                     </small>
                                 </li>
                                 {% endif %}
+                                <li><h6 class="dropdown-header">{{ user.first_name }} {{ user.last_name }}</h6></li>
+                                <li><small class="dropdown-item text-muted">{{ user.email }}</small></li>
                                 <li><hr class="dropdown-divider"></li>
-                                {% if user.is_staff %}
+                                {% if user.is_superuser %}
                                     <li>
                                         <a class="dropdown-item" href="{% url 'admin:index' %}">
                                             <i class="fas fa-cog me-2"></i>
