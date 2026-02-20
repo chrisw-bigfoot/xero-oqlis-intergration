@@ -139,6 +139,18 @@ class XeroDataImport(models.Model):
     
     # Processed data (JSON or DataFrame pickle)
     processed_data = models.JSONField(null=True, blank=True)
+    
+    # Pipeline tracking
+    transformation_status = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Track if report transformation succeeded/failed with details"
+    )
+    database_write_status = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Track if database write succeeded/failed with details"
+    )
 
     def __str__(self):
         return f"{self.legal_entity} - {self.dataset_type} ({self.created_at.strftime('%Y-%m-%d')})"

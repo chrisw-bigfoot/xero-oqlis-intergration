@@ -12,9 +12,8 @@ from uuid import uuid4
 from tenant.models import LegalEntity
 from .models import DatasetType, XeroDataImport, FinancialReport
 from .filters import XeroDataImportFilter
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from financial_report import (
+from .database import write_dataframe_to_database
+from .transformers import (
     transform_balance_sheet,
     transform_budget_summary,
     transform_budget_variance,
@@ -75,6 +74,7 @@ def start_import(request):
         
         # Track import records for error handling
         import_records = []
+        transformed_reports = {}  # Store DataFrames for database writing
         all_succeeded = True
         total_rows_processed = 0
         
@@ -172,7 +172,58 @@ def start_import(request):
                         import_record.rows_processed = rows_processed
                         import_record.status = 'completed'
                         import_record.processed_at = timezone.now()
+                        
+                        # Track transformation success
+                        import_record.transformation_status = {
+                            'status': 'success',
+                            'rows': rows_processed,
+                            'error': None
+                        }
                         import_record.save()
+                        
+                        # Store DataFrame for database writing
+                        transformed_reports[dataset_name] = df
+                        
+                        # Write to SingleStore database
+                        try:
+                            db_success = write_dataframe_to_database(
+                                df=df,
+                                report_type=dataset_name,
+                                report_id=report_id,
+                                tenant_name=legal_entity.tenant.name,
+                                dataset_type_name=dataset_type.display_name
+                            )
+                            
+                            if db_success:
+                                # Track database write success
+                                import_record.database_write_status = {
+                                    'status': 'success',
+                                    'rows': rows_processed,
+                                    'error': None
+                                }
+                                print(f"✓ Database write successful for {dataset_type.display_name}")
+                            else:
+                                # Track database write failure
+                                import_record.database_write_status = {
+                                    'status': 'failed',
+                                    'rows': 0,
+                                    'error': 'Database insert operation returned false'
+                                }
+                                print(f"✗ Database write failed for {dataset_type.display_name}")
+                                all_succeeded = False
+                            
+                            import_record.save()
+                        except Exception as db_error:
+                            # Track database error
+                            db_error_str = str(db_error)
+                            import_record.database_write_status = {
+                                'status': 'failed',
+                                'rows': 0,
+                                'error': db_error_str
+                            }
+                            import_record.save()
+                            print(f"✗ Database error for {dataset_type.display_name}: {db_error_str}")
+                            all_succeeded = False
                         
                         total_rows_processed += rows_processed
                         
@@ -182,14 +233,28 @@ def start_import(request):
                         raise ValueError("Data transformation returned None")
                         
                 except Exception as e:
-                    # Update import record with error
+                    # Update import record with transformation error
+                    error_str = str(e)
                     import_record.status = 'failed'
-                    import_record.error_message = str(e)
+                    import_record.error_message = error_str
                     import_record.processed_at = timezone.now()
+                    
+                    # Track transformation failure
+                    import_record.transformation_status = {
+                        'status': 'failed',
+                        'rows': 0,
+                        'error': error_str
+                    }
+                    # Database write didn't happen if transformation failed
+                    import_record.database_write_status = {
+                        'status': 'skipped',
+                        'rows': 0,
+                        'error': 'Transformation failed, database write skipped'
+                    }
                     import_record.save()
                     
                     all_succeeded = False
-                    print(f"\n✗ Error processing {dataset_type.display_name}: {str(e)}")
+                    print(f"\n✗ Error processing {dataset_type.display_name}: {error_str}")
                     traceback.print_exc()
                     
             except Exception as e:
@@ -278,6 +343,7 @@ def import_upload_multiple(request, legal_entity_id, dataset_type_ids):
         
         # Track import records for error handling
         import_records = []
+        transformed_reports = {}  # Store DataFrames for database writing
         all_succeeded = True
         total_rows_processed = 0
         
@@ -375,7 +441,58 @@ def import_upload_multiple(request, legal_entity_id, dataset_type_ids):
                         import_record.rows_processed = rows_processed
                         import_record.status = 'completed'
                         import_record.processed_at = timezone.now()
+                        
+                        # Track transformation success
+                        import_record.transformation_status = {
+                            'status': 'success',
+                            'rows': rows_processed,
+                            'error': None
+                        }
                         import_record.save()
+                        
+                        # Store DataFrame for database writing
+                        transformed_reports[dataset_name] = df
+                        
+                        # Write to SingleStore database
+                        try:
+                            db_success = write_dataframe_to_database(
+                                df=df,
+                                report_type=dataset_name,
+                                report_id=report_id,
+                                tenant_name=legal_entity.tenant.name,
+                                dataset_type_name=dataset_type.display_name
+                            )
+                            
+                            if db_success:
+                                # Track database write success
+                                import_record.database_write_status = {
+                                    'status': 'success',
+                                    'rows': rows_processed,
+                                    'error': None
+                                }
+                                print(f"✓ Database write successful for {dataset_type.display_name}")
+                            else:
+                                # Track database write failure
+                                import_record.database_write_status = {
+                                    'status': 'failed',
+                                    'rows': 0,
+                                    'error': 'Database insert operation returned false'
+                                }
+                                print(f"✗ Database write failed for {dataset_type.display_name}")
+                                all_succeeded = False
+                            
+                            import_record.save()
+                        except Exception as db_error:
+                            # Track database error
+                            db_error_str = str(db_error)
+                            import_record.database_write_status = {
+                                'status': 'failed',
+                                'rows': 0,
+                                'error': db_error_str
+                            }
+                            import_record.save()
+                            print(f"✗ Database error for {dataset_type.display_name}: {db_error_str}")
+                            all_succeeded = False
                         
                         total_rows_processed += rows_processed
                         
@@ -385,14 +502,28 @@ def import_upload_multiple(request, legal_entity_id, dataset_type_ids):
                         raise ValueError("Data transformation returned None")
                         
                 except Exception as e:
-                    # Update import record with error
+                    # Update import record with transformation error
+                    error_str = str(e)
                     import_record.status = 'failed'
-                    import_record.error_message = str(e)
+                    import_record.error_message = error_str
                     import_record.processed_at = timezone.now()
+                    
+                    # Track transformation failure
+                    import_record.transformation_status = {
+                        'status': 'failed',
+                        'rows': 0,
+                        'error': error_str
+                    }
+                    # Database write didn't happen if transformation failed
+                    import_record.database_write_status = {
+                        'status': 'skipped',
+                        'rows': 0,
+                        'error': 'Transformation failed, database write skipped'
+                    }
                     import_record.save()
                     
                     all_succeeded = False
-                    print(f"\n✗ Error processing {dataset_type.display_name}: {str(e)}")
+                    print(f"\n✗ Error processing {dataset_type.display_name}: {error_str}")
                     traceback.print_exc()
                     
             except Exception as e:

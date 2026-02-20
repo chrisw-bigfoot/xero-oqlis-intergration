@@ -116,14 +116,14 @@
                 <div class="card-body p-0">
                     {% if import_records %}
                         <div class="table-responsive">
-                            <table class="table table-hover mb-0">
+                            <table class="table table-hover mb-0 table-sm">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Report Type</th>
-                                        <th>Status</th>
+                                        <th>Overall</th>
+                                        <th>Transformation</th>
+                                        <th>Database Write</th>
                                         <th>Rows</th>
-                                        <th>File Name</th>
-                                        <th>Processed</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -131,6 +131,8 @@
                                         <tr class="{% if import_record.status == 'failed' %}table-danger{% elif import_record.status == 'completed' %}table-success{% endif %}">
                                             <td>
                                                 <strong>{{ import_record.dataset_type.display_name }}</strong>
+                                                <br>
+                                                <small class="text-muted">{{ import_record.file_name|truncatewords:3 }}</small>
                                             </td>
                                             <td>
                                                 {% if import_record.status == 'completed' %}
@@ -143,34 +145,48 @@
                                                     <span class="badge bg-warning">Pending</span>
                                                 {% endif %}
                                             </td>
-                                            <td>{{ import_record.rows_processed }}</td>
                                             <td>
-                                                <small class="text-muted">
-                                                    {% if import_record.file_name %}
-                                                        {{ import_record.file_name }}
-                                                    {% else %}
-                                                        <span class="text-danger">File deleted</span>
+                                                {% if import_record.transformation_status %}
+                                                    {% if import_record.transformation_status.status == 'success' %}
+                                                        <span class="badge bg-success">✓ Success</span>
+                                                        {% if import_record.transformation_status.rows %}
+                                                            <br><small class="text-muted">{{ import_record.transformation_status.rows }} rows</small>
+                                                        {% endif %}
+                                                    {% elif import_record.transformation_status.status == 'failed' %}
+                                                        <span class="badge bg-danger">✗ Failed</span>
+                                                        {% if import_record.transformation_status.error %}
+                                                            <br><small class="text-danger" title="{{ import_record.transformation_status.error }}">{{ import_record.transformation_status.error|truncatewords:5 }}</small>
+                                                        {% endif %}
+                                                    {% elif import_record.transformation_status.status == 'skipped' %}
+                                                        <span class="badge bg-secondary">- Skipped</span>
                                                     {% endif %}
-                                                </small>
-                                            </td>
-                                            <td>
-                                                {% if import_record.processed_at %}
-                                                    <small>{{ import_record.processed_at|date:"M d H:i" }}</small>
                                                 {% else %}
-                                                    <span class="text-muted">-</span>
+                                                    <span class="badge bg-light text-dark">Not tracked</span>
                                                 {% endif %}
                                             </td>
+                                            <td>
+                                                {% if import_record.database_write_status %}
+                                                    {% if import_record.database_write_status.status == 'success' %}
+                                                        <span class="badge bg-success">✓ Success</span>
+                                                        {% if import_record.database_write_status.rows %}
+                                                            <br><small class="text-muted">{{ import_record.database_write_status.rows }} rows</small>
+                                                        {% endif %}
+                                                    {% elif import_record.database_write_status.status == 'failed' %}
+                                                        <span class="badge bg-danger">✗ Failed</span>
+                                                        {% if import_record.database_write_status.error %}
+                                                            <br><small class="text-danger" title="{{ import_record.database_write_status.error }}">{{ import_record.database_write_status.error|truncatewords:5 }}</small>
+                                                        {% endif %}
+                                                    {% elif import_record.database_write_status.status == 'skipped' %}
+                                                        <span class="badge bg-secondary">- Skipped</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-light text-dark">Not tracked</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <strong>{{ import_record.rows_processed }}</strong>
+                                            </td>
                                         </tr>
-                                        {% if import_record.error_message %}
-                                            <tr class="table-light">
-                                                <td colspan="5">
-                                                    <small class="text-danger">
-                                                        <i class="fas fa-exclamation-triangle me-2"></i>
-                                                        <strong>Error:</strong> {{ import_record.error_message }}
-                                                    </small>
-                                                </td>
-                                            </tr>
-                                        {% endif %}
                                     {% endfor %}
                                 </tbody>
                             </table>
