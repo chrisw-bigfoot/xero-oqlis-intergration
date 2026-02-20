@@ -4,40 +4,29 @@
 {% block title %}Home - Xero Data Integration{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <!-- Welcome Header -->
-    <div class="row mb-5">
-        <div class="col-lg-8">
-            <h1 class="display-5 mb-3">
-                Welcome, {{ user.first_name|default:user.email }}!
-            </h1>
-            <p class="lead text-muted">
-                Import your Xero data with ease
-                <button type="button" class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="modal" data-bs-target="#howItWorksModal" title="Learn how it works">
-                    <i class="fas fa-lightbulb text-warning" style="font-size: 1.25rem;"></i>
-                </button>
-            </p>
-
-            {% if not user.tenant %}
-                <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Attention!</strong> Your account is not assigned to a tenant yet. 
-                    Please contact your administrator to enable this feature.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% else %}
+{% if user.tenant %}
+    <div class="container mt-5">
+        <div class="row mb-5">
+            <div class="col-lg-8">
+                <h1 class="display-5 mb-3">
+                    Welcome, {{ user.first_name|default:user.email }}!
+                </h1>
+                <p class="lead text-muted">
+                    Import your Xero data with ease
+                    <button type="button" class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="modal" data-bs-target="#howItWorksModal" title="Learn how it works">
+                        <i class="fas fa-lightbulb text-warning" style="font-size: 1.25rem;"></i>
+                    </button>
+                </p>
                 <p class="text-muted">
                     {% if user.tenant.logo %}
                         <img src="{{ user.tenant.logo.url }}" alt="{{ user.tenant.name }}" style="height: 32px; width: auto; margin-right: 0.75rem; vertical-align: middle;">
                     {% endif %}
                     <strong>{{ user.tenant.name }}</strong>
                 </p>
-            {% endif %}
+            </div>
         </div>
-    </div>
 
-    <!-- Main Dashboard -->
-    {% if user.tenant %}
+        <!-- Main Dashboard -->
         <!-- Statistics (Optional) -->
         <div class="row mb-5">
             <div class="col-md-3">
@@ -137,15 +126,15 @@
                                         1
                                     </div>
                                     <h6>Select Legal Entity</h6>
-                                    <p class="text-muted">Choose which legal entity you want to import data for</p>
+                                    <p class="text-muted">Choose which legal entity you want to create a financial report for</p>
                                 </div>
 
                                 <div class="process-step mb-4">
                                     <div class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 50px; height: 50px; font-weight: bold;">
                                         2
                                     </div>
-                                    <h6>Pick Dataset Type</h6>
-                                    <p class="text-muted">Select what type of data you're importing (Invoices, Bills, Contacts, etc.)</p>
+                                    <h6>Upload Report Files</h6>
+                                    <p class="text-muted">Upload any combination of report files (Balance Sheet, P&L, Budget, etc.). All uploads are optional.</p>
                                 </div>
                             </div>
 
@@ -154,18 +143,23 @@
                                     <div class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 50px; height: 50px; font-weight: bold;">
                                         3
                                     </div>
-                                    <h6>Upload File</h6>
-                                    <p class="text-muted">Upload your Xero exported file (CSV or XLSX)</p>
+                                    <h6>Process & Link</h6>
+                                    <p class="text-muted">All files are processed together as a single financial report and assigned a unique report ID</p>
                                 </div>
 
                                 <div class="process-step mb-4">
                                     <div class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 50px; height: 50px; font-weight: bold;">
                                         4
                                     </div>
-                                    <h6>Data Processing</h6>
-                                    <p class="text-muted">Your data is transformed and ready for use</p>
+                                    <h6>Review & Track</h6>
+                                    <p class="text-muted">View your financial report details and track the status of each imported file</p>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="alert alert-info mt-4">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Pro Tip:</strong> Upload multiple report types at once! They'll be processed together and linked with the same report ID for easy tracking.
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -175,27 +169,30 @@
             </div>
         </div>
 
+    </div> <!-- Close container for tenant case -->
+
     {% else %}
-        <!-- No Tenant Alert -->
-        <div class="row">
-            <div class="col-md-8 mx-auto">
-                <div class="card border-0 shadow-lg">
-                    <div class="card-body text-center p-5">
-                        <i class="fas fa-info-circle fa-3x text-warning mb-3"></i>
-                        <h4>Account Not Configured</h4>
-                        <p class="text-muted mb-4">
-                            Your account is not yet assigned to a tenant. Please contact your administrator to set up your account.
-                        </p>
-                        <a href="{% url 'logout' %}" class="btn btn-secondary">
-                            <i class="fas fa-sign-out-alt me-2"></i>
-                            Sign Out
-                        </a>
+        <!-- No Tenant Alert - Full Height -->
+        <div class="container-fluid d-flex align-items-center justify-content-center min-vh-100">
+            <div class="row w-100">
+                <div class="col-md-6 mx-auto">
+                    <div class="card border-0 shadow-lg">
+                        <div class="card-body text-center p-5">
+                            <i class="fas fa-exclamation-circle fa-4x text-warning mb-4"></i>
+                            <h3 class="mb-3">Account Not Configured</h3>
+                            <p class="text-muted mb-4 lead">
+                                Your account is not yet assigned to a tenant. Please contact your administrator to set up your account.
+                            </p>
+                            <a href="{% url 'logout' %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-sign-out-alt me-2"></i>
+                                Sign Out
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     {% endif %}
-</div>
 
 <style>
 .hover-shadow {

@@ -1,0 +1,242 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Upload Financial Report Files{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <h1 class="card-title mb-4">
+                        <i class="fas fa-cloud-upload-alt me-2 text-primary"></i>
+                        Upload Financial Report Files
+                    </h1>
+
+                    <!-- Report Details -->
+                    <div class="alert alert-info mb-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-building me-2"></i>
+                                    Legal Entity
+                                </h6>
+                                <p class="mb-0"><strong>{{ legal_entity.name }}</strong></p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-list me-2"></i>
+                                    Report Types
+                                </h6>
+                                <p class="mb-0">
+                                    {% for dtype in dataset_types %}
+                                        <span class="badge bg-primary">{{ dtype.display_name }}</span>
+                                        {% if not forloop.last %}<br>{% endif %}
+                                    {% endfor %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- File Upload Form -->
+                    <form method="post" action="" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+
+                        <p class="text-muted mb-4">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Upload the Xero export files for each report type. Files are optional - skip any report types you don't need.
+                        </p>
+
+                        <!-- Upload Fields for Each Report Type -->
+                        {% for dtype in dataset_types %}
+                            <div class="card mb-4 border-light">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">
+                                        <i class="fas fa-file me-2"></i>
+                                        {{ dtype.display_name }}
+                                        <span class="badge bg-secondary">Optional</span>
+                                    </h5>
+
+                                    {% if dtype.description %}
+                                        <p class="text-muted small mb-3">{{ dtype.description }}</p>
+                                    {% endif %}
+
+                                    <!-- Drag and Drop Area -->
+                                    <div 
+                                        class="drop-zone border-2 border-dashed rounded p-5 text-center cursor-pointer" 
+                                        id="dropZone_{{ dtype.id }}"
+                                        data-dtype-id="{{ dtype.id }}"
+                                        style="border-color: #dee2e6; transition: all 0.3s;"
+                                    >
+                                        <i class="fas fa-file-csv fa-3x mb-3 text-muted file-icon" id="fileIcon_{{ dtype.id }}"></i>
+                                        <h6 class="mb-2">Drag and drop your file here</h6>
+                                        <p class="text-muted mb-3 small">or</p>
+                                        <input 
+                                            type="file" 
+                                            class="form-control d-none file-input" 
+                                            id="file_{{ dtype.id }}"
+                                            name="file_{{ dtype.id }}"
+                                            accept=".csv,.xlsx,.xls"
+                                            data-dtype-id="{{ dtype.id }}"
+                                        >
+                                        <label for="file_{{ dtype.id }}" class="btn btn-primary mb-2" style="cursor: pointer;">
+                                            <i class="fas fa-folder-open me-2"></i>
+                                            Browse Files
+                                        </label>
+                                        <p class="text-muted small mb-0">
+                                            Supported: CSV, XLSX, XLS (Max 50MB)
+                                        </p>
+                                    </div>
+
+                                    <!-- Selected File Display -->
+                                    <div class="selected-file mt-3 d-none" id="selectedFile_{{ dtype.id }}">
+                                        <div class="alert alert-success mb-0">
+                                            <i class="fas fa-check-circle me-2"></i>
+                                            <strong>Selected:</strong> 
+                                            <span class="file-name"></span>
+                                            <button type="button" class="btn btn-sm btn-outline-danger float-end clear-btn" data-dtype-id="{{ dtype.id }}">
+                                                <i class="fas fa-times me-1"></i> Clear
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2 mt-5">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                                <i class="fas fa-upload me-2"></i>
+                                Upload and Process Reports
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Back Link -->
+                    <div class="text-center mt-3">
+                        <a href="{% url 'start_import' %}" class="btn btn-link">
+                            <i class="fas fa-arrow-left me-2"></i>
+                            Back to Report Setup
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="card mt-4 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-question-circle me-2 text-info"></i>
+                        File Upload Tips
+                    </h5>
+                    <ul class="small mb-0">
+                        <li>Files must be in CSV, XLSX, or XLS format</li>
+                        <li>Files must match the Xero export format for their report type</li>
+                        <li>You can upload all files, some, or none - they're all optional</li>
+                        <li>Files are processed together as a single financial report</li>
+                        <li>Maximum 50MB per file</li>
+                        <li>Uploaded files are automatically deleted after processing</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize drag and drop for each report type
+document.querySelectorAll('.drop-zone').forEach(dropZone => {
+    const dtypeId = dropZone.dataset.dtypeId;
+    const fileInput = document.getElementById(`file_${dtypeId}`);
+    const selectedFileDiv = document.getElementById(`selectedFile_${dtypeId}`);
+    const fileNameSpan = selectedFileDiv.querySelector('.file-name');
+    const clearBtn = selectedFileDiv.querySelector('.clear-btn');
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // Highlight on drag
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = '#0d6efd';
+            dropZone.style.backgroundColor = '#f8f9ff';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = '#dee2e6';
+            dropZone.style.backgroundColor = 'transparent';
+        }, false);
+    });
+
+    // Handle drop
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files;
+        handleFileSelection(dtypeId);
+    }, false);
+
+    // Handle file selection via input
+    fileInput.addEventListener('change', () => handleFileSelection(dtypeId));
+
+    // Handle clear button
+    clearBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        fileInput.value = '';
+        selectedFileDiv.classList.add('d-none');
+    });
+
+    function handleFileSelection(dtypeId) {
+        const fileInput = document.getElementById(`file_${dtypeId}`);
+        const selectedFileDiv = document.getElementById(`selectedFile_${dtypeId}`);
+        const fileNameSpan = selectedFileDiv.querySelector('.file-name');
+
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const validExtensions = ['csv', 'xlsx', 'xls'];
+            const fileExt = file.name.split('.').pop().toLowerCase();
+            
+            if (validExtensions.includes(fileExt)) {
+                fileNameSpan.textContent = file.name;
+                selectedFileDiv.classList.remove('d-none');
+            } else {
+                alert('Invalid file type. Please upload a CSV, XLSX, or XLS file.');
+                fileInput.value = '';
+                selectedFileDiv.classList.add('d-none');
+            }
+        } else {
+            selectedFileDiv.classList.add('d-none');
+        }
+    }
+
+    // Make drop zone clickable
+    dropZone.addEventListener('click', () => fileInput.click());
+});
+</script>
+
+<style>
+.drop-zone {
+    cursor: pointer;
+}
+</style>
+{% endblock %}

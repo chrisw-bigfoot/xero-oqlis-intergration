@@ -6,38 +6,40 @@ from django.utils import timezone
 import tempfile
 import os
 import traceback
+import json
+from datetime import datetime
+from uuid import uuid4
 from tenant.models import LegalEntity
-from .models import DatasetType, XeroDataImport
+from .models import DatasetType, XeroDataImport, FinancialReport
 from .filters import XeroDataImportFilter
-from .datasets.budget_summary import transform_budget_summary
-from .datasets.management_report import process_management_report
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from financial_report import (
+    transform_balance_sheet,
+    transform_budget_summary,
+    transform_budget_variance,
+    transform_profit_loss,
+    transform_profit_loss_ly
+)
 
 
 @login_required
 def start_import(request):
-    """Start a new import - select legal entity and dataset type"""
+    """Create financial report - select entity and upload report files"""
     if not request.user.tenant:
         messages.error(request, "Please contact your administrator to assign you to a tenant.")
         return redirect("home")
     
-    # Get legal entities for this tenant
+    # Get legal entities and dataset types for this tenant
     legal_entities = LegalEntity.objects.filter(tenant=request.user.tenant).order_by('name')
     dataset_types = DatasetType.objects.all().order_by('display_name')
     
     if request.method == 'POST':
         legal_entity_id = request.POST.get('legal_entity')
-        dataset_type_id = request.POST.get('dataset_type')
         
-        # Validate selections
+        # Validate legal entity selection
         if not legal_entity_id:
             messages.error(request, "Please select a legal entity.")
-            return render(request, 'xero/start_import.html', {
-                'legal_entities': legal_entities,
-                'dataset_types': dataset_types,
-            })
-        
-        if not dataset_type_id:
-            messages.error(request, "Please select a dataset type.")
             return render(request, 'xero/start_import.html', {
                 'legal_entities': legal_entities,
                 'dataset_types': dataset_types,
@@ -48,10 +50,185 @@ def start_import(request):
         if legal_entity.tenant_id != request.user.tenant_id:
             return HttpResponseForbidden("You don't have access to this legal entity.")
         
-        dataset_type = get_object_or_404(DatasetType, id=dataset_type_id)
+        # Check if at least one file was uploaded
+        has_files = any(request.FILES.get(f'file_{dtype.id}') for dtype in dataset_types)
         
-        # Redirect to file upload view
-        return redirect('import_upload', legal_entity_id=legal_entity_id, dataset_type_id=dataset_type_id)
+        if not has_files:
+            messages.error(request, "Please upload at least one report file.")
+            return render(request, 'xero/start_import.html', {
+                'legal_entities': legal_entities,
+                'dataset_types': dataset_types,
+                'selected_entity_id': int(legal_entity_id),
+            })
+        
+        # Create the financial report
+        report_date = datetime.now()
+        report_id = f"{report_date.strftime('%B%Y')}-{str(uuid4()).split('-')[-1]}"
+        
+        financial_report = FinancialReport.objects.create(
+            report_id=report_id,
+            legal_entity=legal_entity,
+            created_by=request.user,
+            status='processing',
+            report_month=report_date.strftime("%B %Y")
+        )
+        
+        # Track import records for error handling
+        import_records = []
+        all_succeeded = True
+        total_rows_processed = 0
+        
+        # Process each file upload
+        for dataset_type in dataset_types:
+            file_key = f'file_{dataset_type.id}'
+            file = request.FILES.get(file_key)
+            
+            if not file:
+                # File is optional
+                continue
+            
+            # Validate file extension
+            allowed_extensions = ['csv', 'xlsx', 'xls']
+            file_ext = file.name.split('.')[-1].lower()
+            
+            if file_ext not in allowed_extensions:
+                messages.warning(request, f"{dataset_type.display_name}: File format not supported. Skipped.")
+                continue
+            
+            # Create import record
+            import_record = XeroDataImport.objects.create(
+                financial_report=financial_report,
+                legal_entity=legal_entity,
+                dataset_type=dataset_type,
+                report_id=report_id,
+                file=file,
+                file_name=file.name,
+                tenant_name=legal_entity.tenant.name,
+                created_by=request.user,
+                status='processing'
+            )
+            import_records.append((dataset_type, import_record))
+            
+            try:
+                # Save file to temporary location
+                tmp_path = None
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
+                    for chunk in file.chunks():
+                        tmp_file.write(chunk)
+                    tmp_path = tmp_file.name
+                
+                print(f"\n{'='*60}")
+                print(f"Processing {dataset_type.display_name} for {legal_entity.name}")
+                print(f"Report ID: {report_id}")
+                print(f"{'='*60}\n")
+                
+                # Transform based on dataset type
+                df = None
+                dataset_name = dataset_type.name.lower()
+                created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                try:
+                    if dataset_name == 'balance_sheet':
+                        df = transform_balance_sheet(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name == 'budget_summary':
+                        df = transform_budget_summary(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name == 'budget_variance':
+                        df = transform_budget_variance(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name == 'profit_and_loss':
+                        df = transform_profit_loss(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name in ('profit_and_loss_vs_py', 'profit_and_loss_vs_ly'):
+                        df = transform_profit_loss_ly(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    else:
+                        raise ValueError(f"Unknown dataset type: {dataset_name}")
+                    
+                    if df is not None:
+                        # Update import record with success info
+                        rows_processed = len(df)
+                        import_record.rows_processed = rows_processed
+                        import_record.status = 'completed'
+                        import_record.processed_at = timezone.now()
+                        import_record.save()
+                        
+                        total_rows_processed += rows_processed
+                        
+                        print(f"\n✓ {dataset_type.display_name} - {rows_processed} rows processed")
+                        print(f"Columns: {df.columns.tolist()}")
+                    else:
+                        raise ValueError("Data transformation returned None")
+                        
+                except Exception as e:
+                    # Update import record with error
+                    import_record.status = 'failed'
+                    import_record.error_message = str(e)
+                    import_record.processed_at = timezone.now()
+                    import_record.save()
+                    
+                    all_succeeded = False
+                    print(f"\n✗ Error processing {dataset_type.display_name}: {str(e)}")
+                    traceback.print_exc()
+                    
+            except Exception as e:
+                # Update import record with error
+                import_record.status = 'failed'
+                import_record.error_message = str(e)
+                import_record.processed_at = timezone.now()
+                import_record.save()
+                
+                all_succeeded = False
+                print(f"\n✗ Error with {dataset_type.display_name}: {str(e)}")
+                traceback.print_exc()
+                
+            finally:
+                # Clean up temporary file
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except PermissionError:
+                        print(f"Warning: Could not delete temp file {tmp_path}")
+                
+                # Delete uploaded file for data privacy
+                if import_record.file:
+                    import_record.file.delete(save=False)
+        
+        # Update financial report status
+        financial_report.total_rows_processed = total_rows_processed
+        if all_succeeded:
+            financial_report.status = 'completed'
+            financial_report.completed_at = timezone.now()
+            messages.success(request, f"Financial report processed successfully! {total_rows_processed} total rows processed across {len(import_records)} reports.")
+        else:
+            financial_report.status = 'failed'
+            financial_report.completed_at = timezone.now()
+            messages.error(request, "One or more reports encountered errors. See details below.")
+        
+        financial_report.save()
+        
+        return redirect('import_detail', import_id=financial_report.id)
     
     context = {
         'legal_entities': legal_entities,
@@ -61,8 +238,8 @@ def start_import(request):
 
 
 @login_required
-def import_upload(request, legal_entity_id, dataset_type_id):
-    """Upload file for data import"""
+def import_upload_multiple(request, legal_entity_id, dataset_type_ids):
+    """Upload files for multiple report types in a single financial report"""
     if not request.user.tenant:
         messages.error(request, "Please contact your administrator to assign you to a tenant.")
         return redirect("home")
@@ -72,153 +249,209 @@ def import_upload(request, legal_entity_id, dataset_type_id):
     if legal_entity.tenant_id != request.user.tenant_id:
         return HttpResponseForbidden("You don't have access to this legal entity.")
     
-    dataset_type = get_object_or_404(DatasetType, id=dataset_type_id)
+    # Parse dataset type IDs
+    try:
+        dataset_type_id_list = [int(id) for id in dataset_type_ids.split(',')]
+    except (ValueError, AttributeError):
+        messages.error(request, "Invalid dataset types specified.")
+        return redirect('start_import')
+    
+    # Get selected dataset types
+    selected_types = DatasetType.objects.filter(id__in=dataset_type_id_list).order_by('display_name')
+    
+    if not selected_types.exists():
+        messages.error(request, "No valid dataset types selected.")
+        return redirect('start_import')
     
     if request.method == 'POST':
-        file = request.FILES.get('file')
+        # Create the financial report
+        report_date = datetime.now()
+        report_id = f"{report_date.strftime('%B%Y')}-{str(uuid4()).split('-')[-1]}"
         
-        if not file:
-            messages.error(request, "Please select a file to upload.")
-            return render(request, 'xero/import_upload.html', {
-                'legal_entity': legal_entity,
-                'dataset_type': dataset_type,
-            })
-        
-        # Validate file extension (basic check for CSV/XLSX)
-        allowed_extensions = ['csv', 'xlsx', 'xls']
-        file_ext = file.name.split('.')[-1].lower()
-        
-        if file_ext not in allowed_extensions:
-            messages.error(request, f"Please upload a file in one of these formats: {', '.join(allowed_extensions).upper()}")
-            return render(request, 'xero/import_upload.html', {
-                'legal_entity': legal_entity,
-                'dataset_type': dataset_type,
-            })
-        
-        # Create the import record
-        import_record = XeroDataImport.objects.create(
+        financial_report = FinancialReport.objects.create(
+            report_id=report_id,
             legal_entity=legal_entity,
-            dataset_type=dataset_type,
-            file=file,
-            file_name=file.name,
             created_by=request.user,
-            status='processing'
+            status='processing',
+            report_month=report_date.strftime("%B %Y")
         )
         
-        try:
-            # Save file to temporary location for processing
-            tmp_path = None
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
-                # Read file content and write to temp file
-                for chunk in file.chunks():
-                    tmp_file.write(chunk)
-                tmp_path = tmp_file.name
-            
-            # Process based on dataset type
-            dataset_name = dataset_type.name.lower()
-            
-            print(f"\n{'='*60}")
-            print(f"Processing {dataset_type.display_name} import for {legal_entity.name}")
-            print(f"{'='*60}\n")
-            
-            if dataset_name == 'budget_summary':
-                # Process budget summary
-                df = transform_budget_summary(
-                    file_path=tmp_path,
-                    legal_entity=legal_entity.id
-                )
-                print(f"\nBudget Summary - First rows:")
-                print(df.head(10))
-                print(f"\nShape: {df.shape}")
-                print(f"Columns: {df.columns.tolist()}\n")
-                import_record.rows_processed = len(df)
-                
-            elif dataset_name == 'management_reports':
-                # Process management reports
-                result_dfs = process_management_report(
-                    file_path=tmp_path,
-                    legal_entity=legal_entity.id
-                )
-                print(f"\nManagement Reports Results:")
-                total_rows = 0
-                for report_name, df in result_dfs.items():
-                    if df is not None:
-                        print(f"\n{report_name.upper()}")
-                        print(f"  Shape: {df.shape}")
-                        print(f"  Columns: {df.columns.tolist()}")
-                        print(f"  First rows:")
-                        print(df.head(5))
-                        total_rows += len(df)
-                    else:
-                        print(f"\n{report_name.upper()}: Failed to process")
-                
-                import_record.rows_processed = total_rows
-                
-            else:
-                raise ValueError(f"Unknown dataset type: {dataset_name}")
-            
-            # Update import record status to completed
-            import_record.status = 'completed'
-            import_record.processed_at = timezone.now()
-            import_record.save()
-            
-            messages.success(request, f"File processed successfully! {import_record.rows_processed} rows imported.")
-            
-            # Delete the uploaded file for data privacy/compliance
-            if import_record.file:
-                import_record.file.delete(save=False)
-            
-        except Exception as e:
-            # Update import record with error
-            import_record.status = 'failed'
-            import_record.error_message = str(e)
-            import_record.processed_at = timezone.now()
-            import_record.save()
-            
-            print(f"\nERROR processing import: {str(e)}")
-            traceback.print_exc()
-            
-            messages.error(request, f"Error processing file: {str(e)}")
-            
-            # Delete the uploaded file for data privacy/compliance
-            if import_record.file:
-                import_record.file.delete(save=False)
-            
-            return render(request, 'xero/import_upload.html', {
-                'legal_entity': legal_entity,
-                'dataset_type': dataset_type,
-            })
-            
-        finally:
-            # Clean up temporary file
-            if tmp_path and os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except PermissionError:
-                    # File might still be locked by openpyxl/pandas on Windows
-                    # Let the OS clean it up from temp directory
-                    print(f"Warning: Could not delete temp file {tmp_path}, will be cleaned by OS")
+        # Track import records for error handling
+        import_records = []
+        all_succeeded = True
+        total_rows_processed = 0
         
-        return redirect('import_detail', import_id=import_record.id)
+        # Process each file upload
+        for dataset_type in selected_types:
+            file_key = f'file_{dataset_type.id}'
+            file = request.FILES.get(file_key)
+            
+            if not file:
+                # Optional: skip if not provided, or require all files
+                continue
+            
+            # Validate file extension
+            allowed_extensions = ['csv', 'xlsx', 'xls']
+            file_ext = file.name.split('.')[-1].lower()
+            
+            if file_ext not in allowed_extensions:
+                messages.warning(request, f"{dataset_type.display_name}: File format not supported. Skipped.")
+                continue
+            
+            # Create import record
+            import_record = XeroDataImport.objects.create(
+                financial_report=financial_report,
+                legal_entity=legal_entity,
+                dataset_type=dataset_type,
+                report_id=report_id,
+                file=file,
+                file_name=file.name,
+                tenant_name=request.user.tenant.name,
+                created_by=request.user,
+                status='processing'
+            )
+            import_records.append((dataset_type, import_record))
+            
+            try:
+                # Save file to temporary location
+                tmp_path = None
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_file:
+                    for chunk in file.chunks():
+                        tmp_file.write(chunk)
+                    tmp_path = tmp_file.name
+                
+                print(f"\n{'='*60}")
+                print(f"Processing {dataset_type.display_name} for {legal_entity.name}")
+                print(f"Report ID: {report_id}")
+                print(f"{'='*60}\n")
+                
+                # Transform based on dataset type
+                df = None
+                dataset_name = dataset_type.name.lower()
+                created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                try:
+                    if dataset_name == 'balance_sheet':
+                        df = transform_balance_sheet(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name == 'budget_summary':
+                        df = transform_budget_summary(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name == 'budget_variance':
+                        df = transform_budget_variance(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name == 'profit_and_loss':
+                        df = transform_profit_loss(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    elif dataset_name in ('profit_and_loss_vs_py', 'profit_and_loss_vs_ly'):
+                        df = transform_profit_loss_ly(
+                            file_path=tmp_path,
+                            legal_entity=legal_entity.name,
+                            report_id=report_id,
+                            created_at=created_at
+                        )
+                    else:
+                        raise ValueError(f"Unknown dataset type: {dataset_name}")
+                    
+                    if df is not None:
+                        # Update import record with success info
+                        rows_processed = len(df)
+                        import_record.rows_processed = rows_processed
+                        import_record.status = 'completed'
+                        import_record.processed_at = timezone.now()
+                        import_record.save()
+                        
+                        total_rows_processed += rows_processed
+                        
+                        print(f"\n✓ {dataset_type.display_name} - {rows_processed} rows processed")
+                        print(f"Columns: {df.columns.tolist()}")
+                    else:
+                        raise ValueError("Data transformation returned None")
+                        
+                except Exception as e:
+                    # Update import record with error
+                    import_record.status = 'failed'
+                    import_record.error_message = str(e)
+                    import_record.processed_at = timezone.now()
+                    import_record.save()
+                    
+                    all_succeeded = False
+                    print(f"\n✗ Error processing {dataset_type.display_name}: {str(e)}")
+                    traceback.print_exc()
+                    
+            except Exception as e:
+                # Update import record with error
+                import_record.status = 'failed'
+                import_record.error_message = str(e)
+                import_record.processed_at = timezone.now()
+                import_record.save()
+                
+                all_succeeded = False
+                print(f"\n✗ Error with {dataset_type.display_name}: {str(e)}")
+                traceback.print_exc()
+                
+            finally:
+                # Clean up temporary file
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except PermissionError:
+                        print(f"Warning: Could not delete temp file {tmp_path}")
+                
+                # Delete uploaded file for data privacy
+                if import_record.file:
+                    import_record.file.delete(save=False)
+        
+        # Update financial report status
+        financial_report.total_rows_processed = total_rows_processed
+        if all_succeeded:
+            financial_report.status = 'completed'
+            financial_report.completed_at = timezone.now()
+            messages.success(request, f"Financial report processed successfully! {total_rows_processed} total rows processed across {len(import_records)} reports.")
+        else:
+            financial_report.status = 'failed'
+            financial_report.completed_at = timezone.now()
+            messages.error(request, "One or more reports encountered errors. See details below.")
+        
+        financial_report.save()
+        
+        return redirect('import_detail', import_id=financial_report.id)
     
     context = {
         'legal_entity': legal_entity,
-        'dataset_type': dataset_type,
+        'dataset_types': selected_types,
     }
-    return render(request, 'xero/import_upload.html', context)
+    return render(request, 'xero/import_upload_multiple.html', context)
 
 
 @login_required
 def import_detail(request, import_id):
-    """View import details and status"""
-    import_record = get_object_or_404(XeroDataImport, id=import_id)
+    """View financial report details and status"""
+    report = get_object_or_404(FinancialReport, id=import_id)
     
-    # Verify user has access to this import
-    if import_record.legal_entity.tenant_id != request.user.tenant_id:
-        return HttpResponseForbidden("You don't have access to this import.")
+    # Verify user has access
+    if report.legal_entity.tenant_id != request.user.tenant_id:
+        return HttpResponseForbidden("You don't have access to this report.")
     
     context = {
-        'import': import_record,
+        'report': report,
+        'import_records': report.data_imports.all(),
     }
     return render(request, 'xero/import_detail.html', context)
 
@@ -230,32 +463,27 @@ def import_history(request):
         messages.error(request, "Please contact your administrator to assign you to a tenant.")
         return redirect("home")
     
-    # Get all imports for this tenant's legal entities
-    imports = XeroDataImport.objects.filter(
+    # Get all financial reports for this tenant's legal entities
+    reports = FinancialReport.objects.filter(
         legal_entity__tenant=request.user.tenant
-    ).select_related('legal_entity', 'dataset_type', 'created_by').order_by('-created_at')
+    ).select_related('legal_entity', 'created_by').order_by('-created_at')
     
-    # Apply filters
-    import_filter = XeroDataImportFilter(request.GET, queryset=imports)
-    filtered_imports = import_filter.qs
-    
-    # Calculate metrics on filtered results
-    total_imports = filtered_imports.count()
-    completed_imports = filtered_imports.filter(status='completed').count()
-    failed_imports = filtered_imports.filter(status='failed').count()
+    # Calculate metrics
+    total_reports = reports.count()
+    completed_reports = reports.filter(status='completed').count()
+    failed_reports = reports.filter(status='failed').count()
     
     # Calculate failure rate percentage
-    if total_imports > 0:
-        failure_rate = round((failed_imports / total_imports) * 100)
+    if total_reports > 0:
+        failure_rate = round((failed_reports / total_reports) * 100)
     else:
         failure_rate = 0
     
     context = {
-        'imports': filtered_imports,
-        'filter': import_filter,
-        'total_imports': total_imports,
-        'completed_imports': completed_imports,
-        'failed_imports': failed_imports,
+        'reports': reports,
+        'total_reports': total_reports,
+        'completed_reports': completed_reports,
+        'failed_reports': failed_reports,
         'failure_rate': failure_rate,
     }
     return render(request, 'xero/import_history.html', context)

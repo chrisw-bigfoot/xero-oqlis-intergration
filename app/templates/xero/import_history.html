@@ -1,19 +1,7 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Import History{% endblock %}
-
-{% block extra_css %}
-<style>
-    .django-filter .form-select, 
-    .django-filter .form-control,
-    .django-filter select,
-    .django-filter input[type="date"] {
-        width: 100%;
-        display: block;
-    }
-</style>
-{% endblock %}
+{% block title %}Financial Report History{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
@@ -21,53 +9,20 @@
         <div class="col-md-12">
             <h1 class="mb-4">
                 <i class="fas fa-history me-2"></i>
-                Xero Data Import History
+                Financial Report History
             </h1>
-            <p class="lead text-muted">View all past imports</p>
+            <p class="lead text-muted">View all past financial reports created in your tenant</p>
         </div>
     </div>
 
-    <!-- Filter Section -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <form method="get" class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label">Legal Entity</label>
-                    {{ filter.form.legal_entity }}
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Dataset Type</label>
-                    {{ filter.form.dataset_type }}
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Status</label>
-                    {{ filter.form.status }}
-                </div>
-                <div class="col-md-3">
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary flex-grow-1">
-                            <i class="fas fa-filter me-2"></i>
-                            Apply Filters
-                        </button>
-                        <a href="{% url 'import_history' %}" class="btn btn-outline-secondary">
-                            <i class="fas fa-redo me-2"></i>
-                            Clear
-                        </a>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Imports Table -->
-    {% if imports %}
-        <!-- Summary Stats -->
+    <!-- Summary Stats -->
+    {% if reports %}
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="card text-center shadow-sm">
                     <div class="card-body py-4">
-                        <h5 class="text-muted">Total Uploads</h5>
-                        <p class="display-6 mb-0 text-primary">{{ total_imports }}</p>
+                        <h5 class="text-muted">Total Reports</h5>
+                        <p class="display-6 mb-0 text-primary">{{ total_reports }}</p>
                     </div>
                 </div>
             </div>
@@ -75,7 +30,7 @@
                 <div class="card text-center shadow-sm">
                     <div class="card-body py-4">
                         <h5 class="text-muted">Completed</h5>
-                        <p class="display-6 mb-0 text-success">{{ completed_imports }}</p>
+                        <p class="display-6 mb-0 text-success">{{ completed_reports }}</p>
                     </div>
                 </div>
             </div>
@@ -83,7 +38,7 @@
                 <div class="card text-center shadow-sm">
                     <div class="card-body py-4">
                         <h5 class="text-muted">Failed</h5>
-                        <p class="display-6 mb-0 text-danger">{{ failed_imports }}</p>
+                        <p class="display-6 mb-0 text-danger">{{ failed_reports }}</p>
                     </div>
                 </div>
             </div>
@@ -102,53 +57,57 @@
                 <thead class="table-light">
                     <tr>
                         <th><i class="fas fa-building me-2"></i> Legal Entity</th>
-                        <th><i class="fas fa-list me-2"></i> Dataset Type</th>
-                        <th><i class="fas fa-file me-2"></i> File Name</th>
-                        <th><i class="fas fa-user me-2"></i> Uploaded By</th>
-                        <th><i class="fas fa-calendar me-2"></i> Date</th>
-                        <th><i class="fas fa-chart-bar me-2"></i> Rows</th>
+                        <th><i class="fas fa-id-card me-2"></i> Report ID</th>
+                        <th><i class="fas fa-calendar me-2"></i> Period</th>
+                        <th><i class="fas fa-files me-2"></i> Files</th>
+                        <th><i class="fas fa-chart-bar me-2"></i> Total Rows</th>
+                        <th><i class="fas fa-user me-2"></i> Created By</th>
+                        <th><i class="fas fa-clock me-2"></i> Date</th>
                         <th><i class="fas fa-info-circle me-2"></i> Status</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for import in imports %}
+                    {% for report in reports %}
                         <tr>
                             <td>
-                                <strong>{{ import.legal_entity.name }}</strong>
+                                <strong>{{ report.legal_entity.name }}</strong>
                             </td>
                             <td>
-                                {{ import.dataset_type.display_name }}
+                                <small class="text-muted font-monospace">{{ report.report_id }}</small>
                             </td>
                             <td>
-                                <small class="text-muted">{{ import.file_name }}</small>
+                                <small class="text-muted">{{ report.report_month|default:"Not specified" }}</small>
                             </td>
                             <td>
-                                {{ import.created_by.first_name }} {{ import.created_by.last_name|default:'' }}
+                                <span class="badge bg-info">{{ report.data_imports.count }}</span>
                             </td>
                             <td>
-                                <small class="text-muted">{{ import.created_at|date:"M d, Y" }}</small>
+                                <span class="badge bg-secondary">{{ report.total_rows_processed }}</span>
                             </td>
                             <td>
-                                <span class="badge bg-info">{{ import.rows_processed }}</span>
+                                {{ report.created_by.first_name }} {{ report.created_by.last_name|default:'' }}
                             </td>
                             <td>
-                                {% if import.status == 'pending' %}
+                                <small class="text-muted">{{ report.created_at|date:"M d, Y H:i" }}</small>
+                            </td>
+                            <td>
+                                {% if report.status == 'pending' %}
                                     <span class="badge bg-warning">
                                         <i class="fas fa-hourglass-half me-1"></i>
                                         Pending
                                     </span>
-                                {% elif import.status == 'processing' %}
+                                {% elif report.status == 'processing' %}
                                     <span class="badge bg-info">
                                         <i class="fas fa-spinner fa-spin me-1"></i>
                                         Processing
                                     </span>
-                                {% elif import.status == 'completed' %}
+                                {% elif report.status == 'completed' %}
                                     <span class="badge bg-success">
                                         <i class="fas fa-check-circle me-1"></i>
                                         Completed
                                     </span>
-                                {% elif import.status == 'failed' %}
+                                {% elif report.status == 'failed' %}
                                     <span class="badge bg-danger">
                                         <i class="fas fa-times-circle me-1"></i>
                                         Failed
@@ -156,7 +115,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'import_detail' import_id=import.id %}" class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'import_detail' import_id=report.id %}" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-eye me-1"></i>
                                     View
                                 </a>
@@ -170,10 +129,19 @@
     {% else %}
         <div class="alert alert-info" role="alert">
             <i class="fas fa-info-circle me-2"></i>
-            No imports found. 
-            <a href="{% url 'start_import' %}" class="alert-link">Start your first import</a>.
+            No financial reports found. 
+            <a href="{% url 'start_import' %}" class="alert-link">Create your first report</a>.
         </div>
     {% endif %}
 
+    <!-- Action Buttons -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <a href="{% url 'start_import' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-plus-circle me-2"></i>
+                Create New Financial Report
+            </a>
+        </div>
+    </div>
 </div>
 {% endblock %}
