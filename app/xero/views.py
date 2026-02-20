@@ -7,7 +7,8 @@ import tempfile
 import os
 import traceback
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+from calendar import monthrange, month_name
 from uuid import uuid4
 from tenant.models import LegalEntity
 from .models import DatasetType, XeroDataImport, FinancialReport
@@ -22,6 +23,34 @@ from .transformers import (
 )
 
 
+def get_date_context():
+    """
+    Generate month and year options for date selection.
+    Returns months from 2 years ago to 2 years in the future.
+    
+    Returns:
+        dict: Contains 'months' and 'years' lists and 'current_year'
+    """
+    now = datetime.now()
+    current_year = now.year
+    current_month = now.month
+    
+    # Generate months with number and name
+    months = [(f"{i:02d}", month_name[i]) for i in range(1, 13)]
+    
+    # Generate year range (from 2 years ago to 2 years in the future)
+    start_year = current_year - 2
+    end_year = current_year + 2
+    years = list(range(start_year, end_year + 1))
+    
+    return {
+        'months': months,
+        'years': years,
+        'current_year': current_year,
+        'current_month': f"{current_month:02d}",
+    }
+
+
 @login_required
 def start_import(request):
     """Create financial report - select entity and upload report files"""
@@ -33,8 +62,13 @@ def start_import(request):
     legal_entities = LegalEntity.objects.filter(tenant=request.user.tenant).order_by('name')
     dataset_types = DatasetType.objects.all().order_by('display_name')
     
+    # Get date context for template
+    date_context = get_date_context()
+    
     if request.method == 'POST':
         legal_entity_id = request.POST.get('legal_entity')
+        report_month = request.POST.get('report_month')  # User-selected month (e.g., '02')
+        report_year = request.POST.get('report_year')    # User-selected year (e.g., '2026')
         
         # Validate legal entity selection
         if not legal_entity_id:
@@ -42,6 +76,17 @@ def start_import(request):
             return render(request, 'xero/start_import.html', {
                 'legal_entities': legal_entities,
                 'dataset_types': dataset_types,
+                **date_context,
+            })
+        
+        # Validate month and year
+        if not report_month or not report_year:
+            messages.error(request, "Please select a report month and year.")
+            return render(request, 'xero/start_import.html', {
+                'legal_entities': legal_entities,
+                'dataset_types': dataset_types,
+                'selected_entity_id': int(legal_entity_id) if legal_entity_id else None,
+                **date_context,
             })
         
         # Verify the user has access to this legal entity
@@ -58,10 +103,26 @@ def start_import(request):
                 'legal_entities': legal_entities,
                 'dataset_types': dataset_types,
                 'selected_entity_id': int(legal_entity_id),
+                'selected_month': report_month,
+                'selected_year': report_year,
+                **date_context,
             })
         
-        # Create the financial report
-        report_date = datetime.now()
+        # Create report date from user selection
+        try:
+            report_date = datetime.strptime(f"{report_year}-{report_month}-01", "%Y-%m-%d")
+        except ValueError:
+            messages.error(request, "Invalid month or year selected.")
+            return render(request, 'xero/start_import.html', {
+                'legal_entities': legal_entities,
+                'dataset_types': dataset_types,
+                'selected_entity_id': int(legal_entity_id),
+                'selected_month': report_month,
+                'selected_year': report_year,
+                **date_context,
+            })
+        
+        # Generate report ID using selected date
         report_id = f"{report_date.strftime('%B%Y')}-{str(uuid4()).split('-')[-1]}"
         
         financial_report = FinancialReport.objects.create(
@@ -298,6 +359,7 @@ def start_import(request):
     context = {
         'legal_entities': legal_entities,
         'dataset_types': dataset_types,
+        **date_context,
     }
     return render(request, 'xero/start_import.html', context)
 
@@ -329,8 +391,23 @@ def import_upload_multiple(request, legal_entity_id, dataset_type_ids):
         return redirect('start_import')
     
     if request.method == 'POST':
-        # Create the financial report
-        report_date = datetime.now()
+        # Get report date from user input
+        report_month = request.POST.get('report_month')  # User-selected month (e.g., '02')
+        report_year = request.POST.get('report_year')    # User-selected year (e.g., '2026')
+        
+        # Validate month and year
+        if not report_month or not report_year:
+            messages.error(request, "Please select a report month and year.")
+            return redirect('start_import')
+        
+        # Create report date from user selection
+        try:
+            report_date = datetime.strptime(f"{report_year}-{report_month}-01", "%Y-%m-%d")
+        except ValueError:
+            messages.error(request, "Invalid month or year selected.")
+            return redirect('start_import')
+        
+        # Generate report ID using selected date
         report_id = f"{report_date.strftime('%B%Y')}-{str(uuid4()).split('-')[-1]}"
         
         financial_report = FinancialReport.objects.create(

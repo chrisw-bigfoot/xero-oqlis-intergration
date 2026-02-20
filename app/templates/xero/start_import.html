@@ -77,6 +77,46 @@
                     </div>
                 </div>
 
+                <!-- Report Date Selection -->
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-calendar-alt me-2 text-info"></i>
+                            Report Period
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="modal" data-bs-target="#reportDateGuideModal" title="Learn more">
+                                <i class="fas fa-lightbulb text-warning" style="font-size: 1rem;"></i>
+                            </button>
+                        </h5>
+                        
+                        <p class="text-muted mb-4">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Select the month and year for this report. Default is current month.
+                        </p>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="reportMonth" class="form-label">Month <span class="text-danger">*</span></label>
+                                <select class="form-select" id="reportMonth" name="report_month" required>
+                                    <option value="">-- Select Month --</option>
+                                    {% now "m" as current_month %}
+                                    {% for month_num, month_name in months %}
+                                        <option value="{{ month_num }}" {% if month_num == current_month %}selected{% endif %}>{{ month_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="reportYear" class="form-label">Year <span class="text-danger">*</span></label>
+                                <select class="form-select" id="reportYear" name="report_year" required>
+                                    <option value="">-- Select Year --</option>
+                                    {% for year in years %}
+                                        <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Upload Files Section -->
                 <div class="card shadow-sm">
                     <div class="card-body">
@@ -252,6 +292,48 @@
                             {% endfor %}
                         </div>
                     {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Date Guide Modal -->
+    <div class="modal fade" id="reportDateGuideModal" tabindex="-1" aria-labelledby="reportDateGuideLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="reportDateGuideLabel">
+                        <i class="fas fa-calendar-alt me-2 text-info"></i>
+                        What is the Report Period?
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>The <strong>Report Period</strong> is the month and year that will be used to identify this financial report.</p>
+                    
+                    <h6 class="mt-4 mb-3">When to use this:</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            <strong>Current Period:</strong> If you're uploading a report for the current month, the default is set automatically.
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-history text-warning me-2"></i>
+                            <strong>Back-Loading Data:</strong> If you're uploading historical data from previous months or years, select the appropriate month and year.
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-forward text-info me-2"></i>
+                            <strong>Future Planning:</strong> You can also upload projected or forecast data for future periods.
+                        </li>
+                    </ul>
+                    
+                    <p class="mt-4 mb-0">
+                        <i class="fas fa-lightbulb text-warning me-2"></i>
+                        The report period is used in the report ID (e.g., <code>February2026-abc123</code>).
+                    </p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
