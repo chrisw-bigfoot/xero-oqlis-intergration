@@ -194,35 +194,45 @@ def start_import(request):
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name == 'budget_summary':
                         df = transform_budget_summary(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name == 'budget_variance':
                         df = transform_budget_variance(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name == 'profit_and_loss':
                         df = transform_profit_loss(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name in ('profit_and_loss_vs_py', 'profit_and_loss_vs_ly'):
                         df = transform_profit_loss_ly(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     else:
                         raise ValueError(f"Unknown dataset type: {dataset_name}")
@@ -479,35 +489,45 @@ def import_upload_multiple(request, legal_entity_id, dataset_type_ids):
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name == 'budget_summary':
                         df = transform_budget_summary(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name == 'budget_variance':
                         df = transform_budget_variance(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name == 'profit_and_loss':
                         df = transform_profit_loss(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     elif dataset_name in ('profit_and_loss_vs_py', 'profit_and_loss_vs_ly'):
                         df = transform_profit_loss_ly(
                             file_path=tmp_path,
                             legal_entity=legal_entity.name,
                             report_id=report_id,
-                            created_at=created_at
+                            created_at=created_at,
+                            report_month=financial_report.report_month,
+                            long_format=True
                         )
                     else:
                         raise ValueError(f"Unknown dataset type: {dataset_name}")

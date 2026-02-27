@@ -8,9 +8,41 @@ import pandas as pd
 from datetime import datetime
 from decouple import config
 import logging
+import re
 from .singlestore_client import SingleStoreClient
 
 logger = logging.getLogger(__name__)
+
+
+def infer_column_types(df: pd.DataFrame) -> dict:
+    """
+    Infer SQL column types from pandas DataFrame dtypes.
+    
+    Args:
+        df: Pandas DataFrame to analyze
+    
+    Returns:
+        Dictionary mapping column names to SQL data types
+    """
+    column_types = {}
+    
+    for col, dtype in df.dtypes.items():
+        dtype_name = str(dtype)
+        
+        # Map pandas dtypes to SQL types
+        if 'int' in dtype_name:
+            column_types[col] = 'BIGINT'
+        elif 'float' in dtype_name:
+            column_types[col] = 'DOUBLE'
+        elif 'bool' in dtype_name:
+            column_types[col] = 'BOOLEAN'
+        elif 'datetime' in dtype_name:
+            column_types[col] = 'DATETIME'
+        else:
+            # Default to VARCHAR for object types and strings
+            column_types[col] = 'VARCHAR(500)'
+    
+    return column_types
 
 
 def get_database_client():
@@ -117,7 +149,7 @@ def create_report_tables(client: SingleStoreClient, report_type: str) -> bool:
                     continue
                     
                 if col_name not in existing_cols:
-                    alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"
+                    alter_sql = f"ALTER TABLE {table_name} ADD COLUMN `{col_name}` {col_type}"
                     try:
                         client.connection.autocommit(True)
                         with client.connection.cursor() as cursor:
@@ -159,102 +191,113 @@ def write_dataframe_to_database(
     try:
         client = get_database_client()
         
-        # Create table if it doesn't exist (includes schema migration)
-        if not create_report_tables(client, report_type):
-            logger.error(f"Failed to create/update table for {report_type}")
-            return False
-        
-        # Prepare data for insertion
-        table_name = f"xero_{report_type}"
-        
-        # Create a copy to avoid modifying original
+        # Make a copy to avoid modifying original
         df = df.copy()
         
-        # Ensure tenant column exists in DataFrame
+        # Normalize tenant name for use in table names (alphanumeric + underscore only)
+        def normalize_tenant_name(name):
+            """Convert tenant name to lowercase alphanumeric with underscores"""
+            name = name.lower()
+            name = name.replace(' ', '_')
+            name = re.sub(r'[^a-z0-9_]', '', name)
+            return name
+        
+        # Normalize the tenant name for table naming
+        normalized_tenant = normalize_tenant_name(tenant_name)
+        
+        # Ensure tenant column exists
         if 'tenant' not in df.columns:
             df['tenant'] = tenant_name
         
-        # Get all columns from the DataFrame
-        columns = list(df.columns)
+        # Normalize column names to snake_case (e.g., 'Section Order' -> 'section_order')
+        def to_snake_case(name):
+            """Convert column names to snake_case"""
+            name = name.replace(' ', '_')
+            name = name.lower()
+            name = re.sub(r'[^a-z0-9_]', '', name)
+            return name
         
-        # Convert data types for database compatibility
-        # Known datetime columns that need special handling
-        datetime_columns = ['report_date_at', 'created_at', 'period', 'period_date']
+        # Rename all columns to snake_case FIRST (before table creation)
+        df.columns = [to_snake_case(col) for col in df.columns]
         
-        def safe_datetime_convert(val, col_name):
-            """Safely convert a value to datetime string or None"""
-            if pd.isna(val) or val is None:
-                return None
-            try:
-                # Convert to string to handle all types uniformly
-                val_str = str(val).strip()
+        # Map DataFrame columns to database column names (handle naming mismatches)
+        database_column_mapping = {
+            'report_month': 'report_period',  # DataFrame uses report_month, DB uses report_period
+            'amount': 'value',                 # DataFrame uses amount, DB uses value
+            'period_order': 'period_order_seq' # Rename if period_order conflicts
+        }
+        
+        # Apply the database column mapping for columns that exist
+        rename_mapping = {df_col: db_col for df_col, db_col in database_column_mapping.items() 
+                         if df_col in df.columns}
+        
+        if rename_mapping:
+            df = df.rename(columns=rename_mapping)
+            logger.info(f"Applied database column mappings: {rename_mapping}")
+        
+        # Get table name with normalized tenant prefix
+        table_name = f"{normalized_tenant}_xero_{report_type}"
+        
+        # Check if table exists, if not create it
+        if not client.table_exists(table_name):
+            logger.info(f"Table '{table_name}' does not exist. Creating table...")
+            
+            # Infer column types from DataFrame (now with normalized column names)
+            column_types = infer_column_types(df)
+            logger.info(f"Inferred column types: {column_types}")
+            
+            # Create table
+            if client.create_table(table_name, column_types, if_not_exists=True):
+                logger.info(f"✓ Table '{table_name}' created successfully")
                 
-                # If it's an empty string or 'NaT', return None
-                if not val_str or val_str.lower() in ['nat', 'none', '']:
-                    return None
+                # Create indexes for common query columns
+                indexes = [
+                    ('report_period', f"{table_name}_idx_report_period"),
+                    ('legal_entity', f"{table_name}_idx_legal_entity"),
+                    ('report_id', f"{table_name}_idx_report_id"),
+                    ('period', f"{table_name}_idx_period"),
+                ]
                 
-                # Return the string as-is, let database parse the datetime format
-                # (e.g., "31 December 2025" will be parsed by SingleStore)
-                return val_str
-                    
-            except (ValueError, AttributeError, TypeError) as e:
-                logger.warning(f"Could not process {col_name}={val}: {str(e)}")
-                return None
-        
-        for col in df.columns:
-            # Convert datetime columns to ISO format strings
-            if pd.api.types.is_datetime64_any_dtype(df[col]) or col in datetime_columns:
-                try:
-                    df[col] = df[col].apply(lambda val: safe_datetime_convert(val, col))
-                except Exception as dt_error:
-                    logger.warning(f"Error converting datetime column '{col}': {str(dt_error)}. Setting to None.")
-                    df[col] = None
-                    
-            # Convert numeric columns, filling NaN with 0
-            elif col in ['value', 'section_order', 'subsection_order', 'account_order', 'year', 'month']:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            # Fill NaN in string columns with empty string
-            elif df[col].dtype == 'object':
-                df[col] = df[col].fillna('')
+                for col, idx_name in indexes:
+                    if col in df.columns:
+                        success = client.create_index(table_name, [col], idx_name)
+                        if success:
+                            logger.info(f"✓ Created index '{idx_name}' on column '{col}'")
+                        else:
+                            logger.warning(f"Failed to create index '{idx_name}' on column '{col}'")
             else:
-                # For any remaining columns, handle NaN
-                df[col] = df[col].fillna('')
+                logger.error(f"Failed to create table '{table_name}'")
+                return False
+        else:
+            logger.info(f"Table '{table_name}' already exists")
         
-        # Convert DataFrame to list of tuples for insertion
-        data_tuples = [
-            tuple(row) for row in df[columns].values
-        ]
+        logger.info(f"Preparing to insert {len(df)} rows into table '{table_name}'")
+        logger.info(f"Columns: {list(df.columns)}")
         
-        # Log information about the data being inserted
-        logger.info(f"Preparing to insert {len(data_tuples)} rows for {report_type}")
-        logger.info(f"Columns: {columns}")
-        
-        # Log data types for debugging
-        for col in columns:
-            if col in df.columns:
-                logger.debug(f"Column '{col}' dtype: {df[col].dtype}, sample values: {df[col].head(3).tolist()}")
-        
-        if len(data_tuples) > 0:
-            logger.debug(f"Sample row: {data_tuples[0]}")
+        # Convert DataFrame to list of tuples
+        columns = list(df.columns)
+        data = [tuple(row) for row in df.values]
         
         # Insert data in batches
         batch_size = 1000
         total_inserted = 0
         
-        for i in range(0, len(data_tuples), batch_size):
-            batch = data_tuples[i:i + batch_size]
+        for i in range(0, len(data), batch_size):
+            batch = data[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
             
             if not client.insert_many(table_name, columns, batch):
-                logger.error(f"Failed to insert batch {i // batch_size + 1} for {report_type}")
+                logger.error(f"Failed to insert batch {batch_num} for {report_type}")
                 return False
             
             total_inserted += len(batch)
+            logger.info(f"Inserted batch {batch_num} ({len(batch)} rows)")
         
-        logger.info(f"Successfully inserted {total_inserted} rows into {table_name} for report {report_id}")
+        logger.info(f"✓ Successfully inserted {total_inserted} rows into {table_name}")
         return True
         
     except Exception as e:
-        logger.error(f"Error writing {report_type} data to database: {str(e)}")
+        logger.error(f"Error writing {report_type} data to database: {str(e)}", exc_info=True)
         return False
     finally:
         if client:

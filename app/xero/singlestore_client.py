@@ -115,14 +115,14 @@ class SingleStoreClient:
         try:
             col_definitions = []
             for col_name, col_type in columns.items():
-                col_definitions.append(f"{col_name} {col_type}")
+                col_definitions.append(f"`{col_name}` {col_type}")
             
             if primary_key:
-                col_definitions.append(f"PRIMARY KEY ({primary_key})")
+                col_definitions.append(f"PRIMARY KEY (`{primary_key}`)")
             
             columns_sql = ", ".join(col_definitions)
             if_not_exists_clause = "IF NOT EXISTS" if if_not_exists else ""
-            create_sql = f"CREATE TABLE {if_not_exists_clause} {table_name} ({columns_sql})"
+            create_sql = f"CREATE TABLE {if_not_exists_clause} `{table_name}` ({columns_sql})"
             
             self.connection.autocommit(True)
             with self.connection.cursor() as cursor:
@@ -151,7 +151,7 @@ class SingleStoreClient:
         
         try:
             if_exists_clause = "IF EXISTS" if if_exists else ""
-            drop_sql = f"DROP TABLE {if_exists_clause} {table_name}"
+            drop_sql = f"DROP TABLE {if_exists_clause} `{table_name}`"
             
             self.connection.autocommit(True)
             with self.connection.cursor() as cursor:
@@ -161,6 +161,45 @@ class SingleStoreClient:
                 
         except Exception as e:
             logger.error(f"Failed to drop table '{table_name}': {str(e)}")
+            return False
+    
+    def create_index(
+        self,
+        table_name: str,
+        columns: List[str],
+        index_name: str
+    ) -> bool:
+        """
+        Create an index on table columns.
+        
+        Args:
+            table_name: Name of the table
+            columns: List of column names to index
+            index_name: Name of the index
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.connection:
+            logger.error("Not connected to database")
+            return False
+        
+        try:
+            columns_str = ", ".join([f"`{col}`" for col in columns])
+            create_index_sql = f"CREATE INDEX `{index_name}` ON `{table_name}` ({columns_str})"
+            
+            self.connection.autocommit(True)
+            with self.connection.cursor() as cursor:
+                cursor.execute(create_index_sql)
+                logger.info(f"Index '{index_name}' created successfully")
+                return True
+                
+        except Exception as e:
+            # Log as info if index already exists (error code 1061)
+            if "1061" in str(e):
+                logger.info(f"Index '{index_name}' already exists")
+                return True
+            logger.error(f"Failed to create index '{index_name}': {str(e)}")
             return False
     
     def insert_many(
@@ -187,9 +226,9 @@ class SingleStoreClient:
             return False
         
         try:
-            columns_str = ", ".join(columns)
+            columns_str = ", ".join([f"`{col}`" for col in columns])
             placeholders = ", ".join(["%s"] * len(columns))
-            insert_sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+            insert_sql = f"INSERT INTO `{table_name}` ({columns_str}) VALUES ({placeholders})"
             
             self.connection.autocommit(autocommit)
             with self.connection.cursor() as cursor:
@@ -256,3 +295,30 @@ class SingleStoreClient:
         except Exception as e:
             logger.error(f"Failed to check if table exists: {str(e)}")
             return False
+    
+    def get_table_columns(self, table_name: str) -> List[str]:
+        """
+        Get list of column names for a table.
+        
+        Args:
+            table_name: Name of the table to check
+        
+        Returns:
+            List of column names, or empty list if table doesn't exist
+        """
+        if not self.connection:
+            logger.error("Not connected to database")
+            return []
+        
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = %s AND table_name = %s ORDER BY ORDINAL_POSITION",
+                    [self.database, table_name]
+                )
+                results = cursor.fetchall()
+                return [row[0] for row in results]
+                
+        except Exception as e:
+            logger.error(f"Failed to get table columns: {str(e)}")
+            return []

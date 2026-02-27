@@ -1,182 +1,102 @@
 import pandas as pd
 import numpy as np
-import re
 from datetime import datetime
+import re
+from pathlib import Path
+
+['Gross Profit', 'Net Profit']
 
 
-def parse_report_period(text: str) -> pd.Timestamp | None:
-    """
-    Extract month-end date from strings containing:
-    "For the month ended 31 December 2025" or similar.
-    """
-    if not isinstance(text, str):
-        return None
-    
-    text_lower = text.lower()
-    if 'for the month ended' not in text_lower and 'for the period ended' not in text_lower:
-        return None
-    
-    match = re.search(r'(\d{1,2}\s+[A-Za-z]+\s+\d{4})', text)
-    if not match:
-        return None
-    
-    date_str = match.group(1).strip()
-    
-    try:
-        dt = datetime.strptime(date_str, "%d %B %Y")
-        return pd.Timestamp(dt)
-    except ValueError:
-        try:
-            dt = datetime.strptime(date_str, "%d %b %Y")
-            return pd.Timestamp(dt)
-        except ValueError:
-            return None
+def transform_budget_variance(file_path: str, legal_entity: str = None, report_id: str = None, created_at: str = None, report_month: str = None, long_format: bool = False) -> pd.DataFrame:
+    print(f"Transforming Budget Variance from file: {file_path} ...")
 
+    # Read the Excel file, skipping the first 4 rows which contain metadata
+    df = pd.read_excel(file_path, skiprows=4, header=0)
 
-def transform_budget_variance_report(
-    file_path: str,
-    drop_profit_rows: bool = True,
-    melt_to_long: bool = False
-) -> pd.DataFrame:
-    """
-    Loads the Budget Variance sheet, extracts report period, performs cleaning + section grouping.
+    df.dropna(axis=0, how='all', inplace=True)  # Drop rows that are completely empty
+
+    # Rename first column to 'Account' if it exists as 'Unnamed: 0'
+    if 'Unnamed: 0' in df.columns:
+        df = df.rename(columns={'Unnamed: 0': 'Account'})
     
-    Parameters:
-        file_path: Path to the Excel file
-        drop_profit_rows: If True, removes Gross Profit / Net Profit rows
-        melt_to_long: If True, melts variance columns into long format (ideal for DB)
-                      If False, returns wide format (current structure)
-    
-    Returns:
-        Transformed DataFrame (wide or long depending on melt_to_long)
-    """
-    xls = pd.ExcelFile(file_path)
+    # Get value columns (all columns except Account)
+    value_columns = [col for col in df.columns if col != 'Account']
 
-    # Find the sheet name
-    budget_sheet_name = next(
-        (sheet for sheet in xls.sheet_names if 'budget variance' in sheet.lower()),
-        None
-    )
-    if budget_sheet_name is None:
-        raise ValueError("No sheet found containing 'Budget Variance' in its name")
-
-    # ── Step 1: Extract report period ───────────────────────────────────────────
-    header_df = pd.read_excel(
-        xls,
-        sheet_name=budget_sheet_name,
-        nrows=10,
-        header=None
+    # Create Section column: rows where Account is NOT NaN and ALL value columns are NaN are section headers
+    df['Section'] = np.where(
+        df['Account'].notna() & df[value_columns].isna().all(axis=1),
+        df['Account'],
+        np.nan
     )
 
-    report_period = None
-    for _, row in header_df.iterrows():
-        for cell in row:
-            if isinstance(cell, str):
-                parsed = parse_report_period(cell)
-                if parsed is not None:
-                    report_period = parsed
-                    break
-        if report_period is not None:
-            break
+    # Make Net Profit and Gross Profit sections if they exist in the Account column
+    df.loc[df['Account'] == 'Gross Profit', 'Section'] = 'Gross Profit'
+    df.loc[df['Section'] == 'Gross Profit', 'Account'] = ''
 
-    if report_period is None:
-        print("Warning: Could not find/parse 'For the month ended ...' in top rows.")
-        report_period = pd.NaT
+    df.loc[df['Account'] == 'Net Profit', 'Section'] = 'Net Profit'
+    df.loc[df['Section'] == 'Net Profit', 'Account'] = ''
 
-    # ── Step 2: Read the actual data ─────────────────────────────────────────────
-    df = pd.read_excel(
-        xls,
-        sheet_name=budget_sheet_name,
-        skiprows=4,
-        header=0
-    )
-
-    df = df.dropna(how="all").reset_index(drop=True)
-
-    total_cols = [col for col in df.columns if isinstance(col, str) and col.strip().lower() == 'total']
-    if total_cols:
-        df = df.drop(columns=total_cols)
-
-    possible_account_cols = [
-        'account', 'gl account', 'account description', 'description',
-        'account name', 'ledger account', 'account code'
-    ]
-    account_col = next(
-        (col for col in df.columns if str(col).strip().lower() in possible_account_cols),
-        None
-    )
-    if account_col is None:
-        raise ValueError(f"Could not find account column. Available: {list(df.columns)}")
-
-    df[account_col] = df[account_col].astype(str).str.strip().replace('', np.nan)
-
-    df = df[~df[account_col].str.lower().str.startswith('total', na=False)].reset_index(drop=True)
-
-    other_cols = [c for c in df.columns if c != account_col]
-    is_section_header = (
-        df[account_col].notna()
-        & df[account_col].ne('')
-        & df[other_cols].isna().all(axis=1)
-    )
-
-    df['Section'] = np.where(is_section_header, df[account_col], np.nan)
+    # Forward fill Section to propagate section names to all rows
     df['Section'] = df['Section'].ffill()
 
-    df = df[~is_section_header].reset_index(drop=True)
+    # Drop rows where Account is NaN (empty rows)
+    df = df.dropna(subset=['Account'])
 
-    if not drop_profit_rows:
-        profit_mask = df[account_col].str.contains(r'gross\s*profit|net\s*profit', case=False, na=False, regex=True)
-        df.loc[profit_mask, 'Section'] = df.loc[profit_mask, account_col]
+    # Drop rows where Section has a value and all value columns are NaN (section header rows themselves)
+    df = df[~(df['Section'].notna() & df[value_columns].isna().all(axis=1))]
+    
+    # Reset index
+    df = df.reset_index(drop=True)
 
-    df['Section'] = df['Section'].astype(str).str.strip().replace('nan', np.nan)
+    # Add Section Order column - assign incrementing order to each unique section
+    df['Section Order'] = pd.factorize(df['Section'])[0] + 1
 
-    # Add the extracted period to every row
-    df['Period'] = report_period
+    # Create Subsection column - where Account has a value and all value columns are NaN
+    df['Subsection'] = np.where(
+        df['Account'].notna() & df[value_columns].isna().all(axis=1),
+        df['Account'],
+        np.nan
+    )
 
-    # Standardize account column name
-    if account_col != 'Account' and 'Account' not in df.columns:
-        df = df.rename(columns={account_col: 'Account'})
+    # Forward fill Subsection within each Section
+    df['Subsection'] = df.groupby('Section Order')['Subsection'].ffill()
 
-    # ── Final column selection (wide format base) ────────────────────────────────
-    desired_cols = [
-        'Period', 'Section', 'Account', 'Actual', 'Budget', 'Variance',
-        'Variance %', 'YTD Actual', 'YTD Budget', 'Variance.1', 'Variance %.1'
-    ]
-    existing = [c for c in desired_cols if c in df.columns]
-    df = df[existing].reset_index(drop=True)
+    # Drop rows where Subsection == Account and all value columns are NaN
+    df = df.drop(df[(df['Subsection'] == df['Account']) & df[value_columns].isna().all(axis=1)].index)
 
-    # ── Melt to long format if requested ─────────────────────────────────────────
-    if melt_to_long:
-        id_vars = ['Period', 'Section', 'Account']
-        value_vars = [c for c in df.columns if c not in id_vars]
+    # Reset index
+    df = df.reset_index(drop=True)
 
-        if not value_vars:
-            raise ValueError("No value columns found to melt (e.g. Actual, Budget, Variance...)")
+    # Reorder columns: Section Order, Section, Subsection, Account, then all value columns
+    df = df[['Section Order', 'Section', 'Subsection', 'Account'] + value_columns]
 
-        df_long = pd.melt(
-            df,
-            id_vars=id_vars,
-            value_vars=value_vars,
-            var_name='metric',
-            value_name='value'
-        )
+    # Add Subsection Order column - assign incrementing order to each unique subsection within each section (starts at 1 per section)
+    df['Subsection Order'] = df.groupby('Section Order')['Subsection'].transform(lambda x: pd.factorize(x)[0] + 1)
 
-        # Drop rows with missing values
-        df_long = df_long.dropna(subset=['value'])
+    # Add Account Order column - incrementing from 1 to the last row
+    df['Account Order'] = range(1, len(df) + 1)
 
-        # Convert value to numeric (handle commas, %, etc. if needed)
-        df_long['value'] = pd.to_numeric(df_long['value'], errors='coerce')
-        df_long = df_long.dropna(subset=['value'])
+    # Reorder columns: Section Order, Section, Subsection, Subsection Order, Account Order, Account, then all value columns
+    df = df[['Section Order', 'Section', 'Subsection Order', 'Subsection', 'Account Order', 'Account'] + value_columns]
 
-        # Optional: clean metric names (remove spaces, make consistent)
-        df_long['metric'] = df_long['metric'].str.strip().str.replace(r'\s+', ' ', regex=True)
+    # Fill NaN values in Section, Subsection, and Account with empty strings
+    df[['Section', 'Subsection', 'Account']] = df[['Section', 'Subsection', 'Account']].fillna('')
 
-        # Final order for database-friendly structure
-        df_long = df_long[['Period', 'Section', 'Account', 'metric', 'value']]
+    df['Legal Entity'] = legal_entity
+    df['Report ID'] = report_id
+    df['Created At'] = created_at
+    df['Report Month'] = report_month
 
-        return df_long.reset_index(drop=True)
+    if long_format:
+        id_cols = ['Section Order', 'Section', 'Subsection Order', 'Subsection', 'Account Order', 'Account', 'Legal Entity', 'Report ID', 'Created At', 'Report Month']
+        df = df.melt(id_vars=id_cols, value_vars=value_columns, var_name='Period', value_name='Amount')
+        
+        # Add period_order column to preserve original column order
+        period_order_map = {col: idx + 1 for idx, col in enumerate(value_columns)}
+        df['Period Order'] = df['Period'].map(period_order_map)
 
-    return df.reset_index(drop=True)
+    print(f"Finished transforming Budget Variance. Resulting DataFrame has {len(df)} rows and {len(df.columns)} columns.")
+    return df
 
 
 
